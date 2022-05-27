@@ -74,12 +74,12 @@ class Strat(Vanilla):
 
         try:
             self.wallets_dc_hook = os.getenv('WALLETS_DC_HOOK')
-        except:
+        except Exception:
             self.wallets_dc_hook = None
 
         try:
             self.app_port = os.getenv('APP_PORT')
-        except:
+        except Exception:
             self.app_port = None
 
         self.binance_lev_brackets = None
@@ -823,7 +823,7 @@ class Strat(Vanilla):
         try:
             with open(local_fn) as f:
                 data = json.load(f)
-        except:
+        except Exception:
             print(f"Error in {local_fn}")
             exit()
 
@@ -840,7 +840,7 @@ class Strat(Vanilla):
         try:
             # I don't regret.
             rules['quantityPrecision'] = len(str(rules_json['lot_size_filter']['qty_step']).split('.')[1])
-        except:
+        except Exception:
             rules['quantityPrecision'] = 1  # TODO
 
         rules['pricePrecision'] = rules_json['price_scale']
@@ -849,7 +849,7 @@ class Strat(Vanilla):
         rules['stepSize'] = float(
             rules_json['lot_size_filter']['qty_step'])
 
-        # Bybit has no notional rules. Just keep it very low to make minQty priority.  TODO
+        #  TODO Bybit has no notional rules. Just keep it very low to make minQty priority.
         rules['notional'] = 0.00001
 
         return rules
@@ -862,9 +862,7 @@ class Strat(Vanilla):
         Return available balance (capital)
         If use initial balance is enabled return initial balance
         """
-        if self.use_initial_balance:
-            return self.initial_balance
-        return self.capital
+        return self.initial_balance if self.use_initial_balance else self.capital
 
     @property
     def profit_ratio2(self):

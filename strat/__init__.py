@@ -424,12 +424,12 @@ class Strat(Vanilla):
                 # self.debug('Not ready yet! (initial_margin)')
         return round(im, 6)
 
-    # @property
-    # def available_margin(self) -> float:
-    #     if is_live():
-    #         return super().available_margin * self.leverage
-    #     else:
-    #         return super().available_margin
+    @property
+    def available_margin(self) -> float:
+        if is_live():
+            return super().available_margin * self.leverage
+        else:
+            return super().available_margin
 
     @property
     def avail_margin(self) -> float:

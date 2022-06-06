@@ -14,6 +14,8 @@ Added avail_margin, margin balance != avail margin.
 Update:
 Added liquidation price calculation.
 
+0.1.3: Added liquidation price / price rate calculation.
+
 ## TODO
 Average entry price mismatch.
 

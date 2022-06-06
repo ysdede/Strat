@@ -54,6 +54,7 @@ class Strat(Vanilla):
         self.active = False
         self.trade_ts = None
         self.first_run = True
+        # self.insuf_margin_count = 0
 
         # Settings:
         self.log_enabled = False
@@ -133,6 +134,9 @@ class Strat(Vanilla):
         self.shared_vars['maint_margin'] = 0
         self.shared_vars['max_total_value'] = 0
 
+        # self.max_open_positions = 0
+        # self.current_cycle_positions = 0
+
         self.update_shared_vars('runonce')
 
         self.first_run = False
@@ -166,7 +170,7 @@ class Strat(Vanilla):
         """Calculates the minimum order size for the current symbol/exchange rule.
         Returns:
             float: minimum allowed quantity in base asset
-            float: minimum aloowed position size in quote asset
+            float: minimum allowed position size in quote asset
         """
         cycle_pos_size = 0
         # If USD value of minQTY is greater than minimum notional, use minQTY.
@@ -343,7 +347,7 @@ class Strat(Vanilla):
     
     @property
     def LP1(self):
-        """LP1 Liquidation Price of BOTH position (one-way mode)"""
+        """LP1 Liquidation Price"""
         # TODO: We may have open positions and liq price when trading multi routes.
         #       is_open check commented out for now.
         # if not self.is_open:
@@ -353,11 +357,11 @@ class Strat(Vanilla):
         return LP1_simple
 
     def liq_price(self) -> float:
-        """Liquidation Price (if it's greater than zero) of BOTH position (one-way mode)"""
+        """Liquidation Price (if it's greater than zero)"""
         return self.LP1 if self.LP1 > 0 else float('nan')
         
     def lp_rate(self) -> float:
-        """lp_rate Liquidation Price Rate of BOTH position (one-way mode)"""
+        """Liquidation Price vs Mark Price rate"""
         if not self.is_open:
             return float('nan') # self.LP1 / self.avgEntryPrice if self.avgEntryPrice > 0 else float('nan')
         rate = self.LP1 / self.close if self.is_long else self.close / self.LP1
@@ -418,6 +422,13 @@ class Strat(Vanilla):
                 pass
                 # self.debug('Not ready yet! (initial_margin)')
         return round(im, 6)
+
+    # @property
+    # def available_margin(self) -> float:
+    #     if is_live():
+    #         return super().available_margin * self.leverage
+    #     else:
+    #         return super().available_margin
 
     @property
     def avail_margin(self) -> float:
@@ -991,6 +1002,7 @@ class Strat(Vanilla):
             print(f"{'Annual/MR':<24}| {self.metrics['annual_return'] / (self.shared_vars['max_margin_ratio'] * 2):0.2f}")
             print(f"{'Shared Max. Total Value':<24}| {self.shared_vars['max_total_value']:0.2f}")
             print(f"{'Max. LP Ratio':<24}| {self.shared_vars['max_lp_ratio']:0.02f}")
+            # print(f"{'Insuff. Margin Events':<24}|  {self.insuf_margin_count}")
         except Exception as e:
             print(f"{self.symbol} {e}")
         

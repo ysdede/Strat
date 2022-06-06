@@ -58,7 +58,7 @@ class Strat(Vanilla):
         self.max_open_positions = 0
         self.current_cycle_positions = 0
 
-        self.insuf_margin_count = 0
+        self.insuff_margin_count = 0
 
         # Settings:
         self.log_enabled = False
@@ -164,6 +164,7 @@ class Strat(Vanilla):
         self.shared_vars['margin_ratio'] = self.margin_ratio(caller)
         self.shared_vars['min_margin'] = min(self.shared_vars['min_margin'], self.available_margin)
         self.shared_vars['lp_rate'] = self.lp_rate()
+        self.shared_vars['insuff_margin_count'] = self.insuff_margin_count
         # self.shared_vars['max_lp_ratio'] = max(self.shared_vars['max_lp_ratio'], self.lp_rate())
         
 
@@ -1003,7 +1004,7 @@ class Strat(Vanilla):
             print(f"{'Annual/MR':<24}| {self.metrics['annual_return'] / (self.shared_vars['max_margin_ratio'] * 2):0.2f}")
             print(f"{'Shared Max. Total Value':<24}| {self.shared_vars['max_total_value']:0.2f}")
             print(f"{'Max. LP Ratio':<24}| {self.shared_vars['max_lp_ratio']:0.02f}")
-            print(f"{'Insuff. Margin Events':<24}| {self.insuf_margin_count}")
+            print(f"{'Insuff. Margin Count':<24}| {self.insuff_margin_count}")
         except Exception as e:
             print(f"{self.symbol} {e}")
         

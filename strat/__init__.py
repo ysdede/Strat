@@ -97,7 +97,7 @@ class Strat(Vanilla):
     def run_once(self):
         # If exchange rule files are not present or we're trading live, download them
         exc = 'Bybit Perpetual' if self.trade_with_bybit_rules else self.exchange
-        local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json"
+        local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json".replace('BinanceExch', 'BinanceFuturesExch')
 
         if self.exchange == 'Bybit Perpetual' or self.trade_with_bybit_rules:
             if not os.path.exists(local_fn) or is_live():

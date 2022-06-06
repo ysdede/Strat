@@ -54,6 +54,10 @@ class Strat(Vanilla):
         self.active = False
         self.trade_ts = None
         self.first_run = True
+
+        self.max_open_positions = 0
+        self.current_cycle_positions = 0
+
         # self.insuf_margin_count = 0
 
         # Settings:
@@ -133,9 +137,6 @@ class Strat(Vanilla):
         self.shared_vars['margin_balance'] = 0
         self.shared_vars['maint_margin'] = 0
         self.shared_vars['max_total_value'] = 0
-
-        # self.max_open_positions = 0
-        # self.current_cycle_positions = 0
 
         self.update_shared_vars('runonce')
 

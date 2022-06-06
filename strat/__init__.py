@@ -252,25 +252,20 @@ class Strat(Vanilla):
     @property
     def TMM1(self):
         """TMM1 Total Maintenance Margin of all other contracts, excluding itself"""
-        tmm1 = 0
-        # Iterate over all routes and sum up all maintenance margin
-        for r in self.routes:
-            # If route is not self, add maintenance margin to tmm1
-            if r.symbol != self.symbol:
-                tmm1 += self.shared_vars[r.symbol]['maintenance_margin']  # ❗ Needs to be checked.
-        return tmm1
+        return sum(
+            self.shared_vars[r.symbol]['maintenance_margin']
+            for r in self.routes
+            if r.symbol != self.symbol
+        )
     
     @property
     def UPNL1(self):
         """UPNL1 Unrealized PNL of all other contracts, excluding itself"""
-        upnl1 = 0
-        # Iterate over all routes and sum up all unrealized pnl
-        for r in self.routes:
-            # If route is not self, add unrealized pnl to upnl1
-            if r.symbol != self.symbol:
-                upnl1 += self.shared_vars[r.symbol]['pnl']  # ❗ Needs to be checked.
-        
-        return upnl1
+        return sum(
+            self.shared_vars[r.symbol]['pnl']
+            for r in self.routes
+            if r.symbol != self.symbol
+        )
     
     @property
     def cumB(self):
@@ -350,13 +345,13 @@ class Strat(Vanilla):
     @property
     def LP1(self):
         """LP1 Liquidation Price"""
-        # TODO: We may have open positions and liq price when trading multi routes.
-        #       is_open check commented out for now.
-        # if not self.is_open:
-        #     return float('inf')
-        # LP1 = (self.WB - self.TMM1 + self.UPNL1 + self.cumB + self.cumL + self.cumS - self.Side1BOTH * self.Position1BOTH * self.EP1BOTH - self.Position1LONG * self.EP1LONG + self.Position1SHORT * self.EP1SHORT) / (self.Position1BOTH * self.MMRB + self.Position1LONG * self.MMRL + self.Position1SHORT * self.MMRS - self.Side1BOTH * self.Position1BOTH - self.Position1LONG + self.Position1SHORT)
-        LP1_simple = (self.WB - self.TMM1 + self.UPNL1 + self.cumB - self.Side1BOTH * self.Position1BOTH * self.EP1BOTH) / (self.Position1BOTH * self.MMRB - self.Side1BOTH * self.Position1BOTH)
-        return LP1_simple
+        return (
+            self.WB
+            - self.TMM1
+            + self.UPNL1
+            + self.cumB
+            - self.Side1BOTH * self.Position1BOTH * self.EP1BOTH
+        ) / (self.Position1BOTH * self.MMRB - self.Side1BOTH * self.Position1BOTH)
 
     def liq_price(self) -> float:
         """Liquidation Price (if it's greater than zero)"""
@@ -546,14 +541,10 @@ class Strat(Vanilla):
             if is_live():
                 self.console(msg)
                 self.terminate()
-            else:
-                # print(msg)
-                
-                # Disabled for going live, any potential bug with this can cause a loss of funds
-                if not self.keep_running_in_case_of_liquidation:
-                    # exit()
-                    self.terminate()
-                    raise Exception(msg)
+            elif not self.keep_running_in_case_of_liquidation:
+                # exit()
+                self.terminate()
+                raise Exception(msg)
                 
     def load_bybit_risk_limits(self):
         from pathlib import Path
@@ -646,10 +637,10 @@ class Strat(Vanilla):
                     r['maintMarginRatio'] = self.fixed_margin_ratio
                 else:
                     r['maintMarginRatio'] = b['maintMarginRatio']
-                
+
                 r['maintAmount'] = b['cum']
                 return r
-                
+
         r['maintMarginRatio'] = 0.75  # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
         r['maintAmount'] = 0
         # print(self.bybit_risk_limits)
@@ -699,7 +690,7 @@ class Strat(Vanilla):
                     r['maintMarginRatio'] = self.fixed_margin_ratio
                 else:
                     r['maintMarginRatio'] = b['maintain_margin']
-                
+
                 # TODO: Calculate for Bybit if available/needed
                 r['maintAmount'] = 0.0
                 return r
@@ -825,8 +816,6 @@ class Strat(Vanilla):
 
     def bybit_rules(self):
         """"Parse Bybit trading rules compatible with Binance Futures."""
-        rules_json = None
-
         rules = {'quantityPrecision': 1, 'pricePrecision': 6,
                  'minQty': 1, 'notional': 0.0001, 'stepSize': 0.1}
 
@@ -840,11 +829,14 @@ class Strat(Vanilla):
             print(f"Error in {local_fn}")
             exit()
 
-        for i in data['result']:
-            # TODO: Add USD pairs later!
-            if i['name'] == self.symbol.replace('-', ''):
-                rules_json = i
-                break
+        rules_json = next(
+            (
+                i
+                for i in data['result']
+                if i['name'] == self.symbol.replace('-', '')
+            ),
+            None,
+        )
 
         if rules_json is None:
             print(f"Error in rules_json. {local_fn}")

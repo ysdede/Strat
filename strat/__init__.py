@@ -532,7 +532,7 @@ class Strat(Vanilla):
 
         if self.shared_vars['max_lp_ratio'] != max_lp_snapshot:
             self.shared_vars['max_lp_ratio_ts'] = self.ts
-            msg = f"LP Ratio {max_lp_snapshot:0.2f} -> {self.shared_vars['max_lp_ratio']:0.2f} Caller: {caller}"
+            msg = f"LP Ratio {max_lp_snapshot:0.2f} -> {self.shared_vars['max_lp_ratio']:0.2f}, Price: {self.close}, Liq. Price: {self.LP1:0.2f}, Caller: {caller}"
             self.console(msg, False)
             # self.console(msg)
 

@@ -116,7 +116,7 @@ class Strat(Vanilla):
 
         self.console(f"Rules set for {self.exchange}, Rules Hack: {self.trade_with_bybit_rules}, quantityPrecision:{self.quantityPrecision}, minQty:{self.minQty}, notional:{self.notional} stepSize:{self.stepSize} pricePrecision:{self.pricePrecision}")
         self.console('Trading Mode.') if is_live() else self.console(
-            'Not Trading Mode.')
+            'Not Trading Mode.', False)
 
         self.test_leverage()
 
@@ -178,7 +178,7 @@ class Strat(Vanilla):
         # If USD value of minQTY is greater than minimum notional, use minQTY.
         # Convert minQTY to dollar size and add potential fees before converting back to qty.
         if self.minQty * self.close >= self.notional:
-            self.console(f"minQty * close > notional: {self.minQty * self.close} > {self.notional}")
+            self.console(f"minQty * close > notional: {self.minQty * self.close} > {self.notional}", False)
             qty = self.minQty
             cycle_pos_size = qty * self.close
             fees = cycle_pos_size * self.fee_rate * 6
@@ -187,7 +187,7 @@ class Strat(Vanilla):
             qty = utils.size_to_qty(
                 cycle_pos_size, self.close, precision=self.quantityPrecision, fee_rate=self.fee_rate)
             self.console(
-                f"⚖ Calculate minimum by Qty {self.close=}, {qty=}, Cycle Pos. Size: {cycle_pos_size:0.2f}, {self.notional=}, {self.minQty=}, {self.stepSize=}, Fees: {fees:0.3f}")
+                f"⚖ Calculate minimum by Qty {self.close=}, {qty=}, Cycle Pos. Size: {cycle_pos_size:0.2f}, {self.notional=}, {self.minQty=}, {self.stepSize=}, Fees: {fees:0.3f}", False)
             return qty, cycle_pos_size
 
         qty = utils.size_to_qty(self.notional, self.close, precision=self.quantityPrecision, fee_rate=self.fee_rate)
@@ -205,7 +205,7 @@ class Strat(Vanilla):
                 qty = utils.size_to_qty(cycle_pos_size, self.close, precision=self.quantityPrecision, fee_rate=self.fee_rate)
 
                 self.console(
-                    f"Calculate minimum by Nominal {self.close=}, {qty=}, Cycle Pos. Size: {cycle_pos_size:0.2f}, {self.notional=}, {self.minQty=}, {self.stepSize=}, Fees: {fees:0.3f}")
+                    f"Calculate minimum by Nominal {self.close=}, {qty=}, Cycle Pos. Size: {cycle_pos_size:0.2f}, {self.notional=}, {self.minQty=}, {self.stepSize=}, Fees: {fees:0.3f}", False)
                 return qty, cycle_pos_size
 
     @property
@@ -497,7 +497,7 @@ class Strat(Vanilla):
             self.shared_vars['margin_alert'] = "True"
             msg = (
                 f"Margin Ratio Alert!: {mr}%, Avail. margin: {round(self.available_margin, 2)}, Balance: {round(self.cap, 2)} * {self.leverage} = {round(self.cap * self.leverage, 2)}, Prev. Margin Ratio: {self.shared_vars['margin_ratio']}%, Total value: {self.shared_vars['total_value']}, Margin balance: {self.shared_vars['margin_balance']}, Maint Margin: {self.shared_vars['maint_margin']}, {self.pos_divider=}, {self.div=}, {self.profit_ratio2=}, {(int(self.profit_ratio2 + 1) * self.div)=}\n{json.dumps(self.shared_vars, indent=4)}\nCaller: {caller}")
-            self.console(msg)
+            self.console(msg, False)
         else:
             self.shared_vars['margin_alert'] = "False"
 
@@ -522,7 +522,7 @@ class Strat(Vanilla):
         if self.shared_vars['max_margin_ratio'] != max_mr_snapshot:
             self.shared_vars['max_margin_ratio_ts'] = self.ts
             msg = f"Margin Ratio {max_mr_snapshot} -> {self.shared_vars['max_margin_ratio']} Caller: {caller}"
-            self.console(msg)
+            self.console(msg, False)
             # self.console(msg)
     
     def save_max_lp_ratio(self, lp_ratio, caller=None):
@@ -532,8 +532,8 @@ class Strat(Vanilla):
 
         if self.shared_vars['max_lp_ratio'] != max_lp_snapshot:
             self.shared_vars['max_lp_ratio_ts'] = self.ts
-            msg = f"LP Ratio {max_lp_snapshot} -> {self.shared_vars['max_lp_ratio']} Caller: {caller}"
-            self.console(msg)
+            msg = f"LP Ratio {max_lp_snapshot:0.2f} -> {self.shared_vars['max_lp_ratio']:0.2f} Caller: {caller}"
+            self.console(msg, False)
             # self.console(msg)
 
     def check_liquidation(self, mr, caller=None):
@@ -910,7 +910,7 @@ class Strat(Vanilla):
                 else:
                     self.log(f'{self.ts} {self.symbol} {msg}', send_notification=send_notification)
             else:
-                self.jesse_version()
+                # self.jesse_version()
                 print(f'\n{self.ts} {self.symbol} {msg}')
 
     def jesse_version(self):
@@ -948,10 +948,10 @@ class Strat(Vanilla):
                 result = requests.post(hook_url, json=data)
                 result.raise_for_status()
             except requests.exceptions.HTTPError as err:
-                self.console(err)
+                self.console(err, False)
             else:
                 self.console(
-                    f"Payload delivered successfully, code {result.status_code}.")
+                    f"Payload delivered successfully, code {result.status_code}.", False)
         elif self.log_enabled:
             print(f'{self.ts} {self.symbol} {data}')
 

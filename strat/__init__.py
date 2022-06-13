@@ -257,7 +257,10 @@ class Strat(Vanilla):
         for r in self.routes:
             # If route is not self, add maintenance margin to tmm1
             if r.symbol != self.symbol:
-                tmm1 += self.shared_vars[r.symbol]['maintenance_margin']  # ❗ Needs to be checked.
+                try:
+                    tmm1 += self.shared_vars[r.symbol]['maintenance_margin']  # ❗ Needs to be checked.
+                except:
+                    pass
         return tmm1
     
     @property
@@ -268,7 +271,10 @@ class Strat(Vanilla):
         for r in self.routes:
             # If route is not self, add unrealized pnl to upnl1
             if r.symbol != self.symbol:
-                upnl1 += self.shared_vars[r.symbol]['pnl']  # ❗ Needs to be checked.
+                try:
+                    upnl1 += self.shared_vars[r.symbol]['pnl']  # ❗ Needs to be checked.
+                except:
+                    pass
         
         return upnl1
     
@@ -896,12 +902,22 @@ class Strat(Vanilla):
         else:
             return datetime.datetime.utcfromtimestamp(self.current_candle[0] / 1000).strftime("%Y-%m-%d %H:%M:%S")
 
-    def console(self, msg):
+    def console(self, msg, send_notification=True):
         if self.log_enabled:
             if is_live():
-                self.log(f'{self.ts} {self.symbol} {msg}')
+                if version('jesse').split('.')[0] == '0' and int(version('jesse').split('.')[1]) < 36:
+                    self.log(f'{self.ts} {self.symbol} {msg}')
+                else:
+                    self.log(f'{self.ts} {self.symbol} {msg}', send_notification=send_notification)
             else:
-                print(f'{self.ts} {self.symbol} {msg}')
+                self.jesse_version()
+                print(f'\n{self.ts} {self.symbol} {msg}')
+
+    def jesse_version(self):
+        if version('jesse').split('.')[0] == '0' and int(version('jesse').split('.')[1]) < 36:
+            print(f"\nJesse version < 0.36.0, Installed: {version('jesse')}")
+        else:
+            print(f"\nJesse version >= 0.36.0, Installed: {version('jesse')}")
 
     def debug(self, msg):
         if self.debug_enabled:

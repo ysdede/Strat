@@ -16,6 +16,10 @@ Added liquidation price calculation.
 
 0.1.3: Added liquidation price / price rate calculation.
 
+0.1.4:
+
+0.1.5: Renamed self.capital to self.balance for compatibility with new jesse.
+
 ## TODO
 Average entry price mismatch.
 

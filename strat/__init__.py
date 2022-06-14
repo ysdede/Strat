@@ -120,13 +120,13 @@ class Strat(Vanilla):
 
         self.test_leverage()
 
-        self.initial_balance = self.capital
+        self.initial_balance = self.balance
         self.break_even_file = f"{self.symbol}.break"
 
         # Init
         self.shared_vars['locked_balance'] = 0
-        self.shared_vars['free_balance'] = self.capital
-        self.shared_vars['previous_balance'] = self.capital
+        self.shared_vars['free_balance'] = self.balance
+        self.shared_vars['previous_balance'] = self.balance
         self.shared_vars['min_margin'] = self.available_margin
         self.shared_vars['max_margin_ratio'] = 0
         self.shared_vars['max_lp_ratio'] = float('nan')
@@ -881,7 +881,7 @@ class Strat(Vanilla):
         Return available balance (capital)
         If use initial balance is enabled return initial balance
         """
-        return self.initial_balance if self.use_initial_balance else self.capital
+        return self.initial_balance if self.use_initial_balance else self.balance
 
     @property
     def profit_ratio2(self):
@@ -929,7 +929,7 @@ class Strat(Vanilla):
     def log_balance_to_dc(self):
         strategy_name = self.__class__.__name__
         bot_name = f"{self.app_port} {strategy_name} {self.symbol} {self.exchange} {self.leverage}x"
-        msg = f"Balance: {self.initial_balance:0.2f} -> {self.capital:0.2f}"  # TODO: ?''''''''''''''''
+        msg = f"Balance: {self.initial_balance:0.2f} -> {self.balance:0.2f}"  # TODO: ?''''''''''''''''
         self.to_discord(self.wallets_dc_hook, bot_name, msg)
 
     def to_discord(self, hook_url=None, username='None', msg='None'):

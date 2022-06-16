@@ -32,6 +32,7 @@ class Strat(Vanilla):
 
         # Kill Switch and break even exit variables
         self.break_even_file = None
+        self.pause_file = None
 
         # Shared variables
         self.shared_vars['ts'] = 0
@@ -122,6 +123,7 @@ class Strat(Vanilla):
 
         self.initial_balance = self.balance
         self.break_even_file = f"{self.symbol}.break"
+        self.pause_file = f"{self.symbol}.pause"
 
         # Init
         self.shared_vars['locked_balance'] = 0

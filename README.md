@@ -27,6 +27,9 @@ Add liquidation price calculation.
 0.1.8:
 Add pnl to discord wallect message.
 
+0.1.9:
+Add Alex Lau's position.entry_price fix for persistency.
+
 ## TODO
 Average entry price mismatch.
 

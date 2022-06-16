@@ -9,16 +9,23 @@ If self.use_initial_balance is True then
 Don't use self.use_initial_balance and save profits together.
 
 Update:
-Added avail_margin, margin balance != avail margin.
+Add avail_margin, margin balance != avail margin.
 
 Update:
-Added liquidation price calculation.
+Add liquidation price calculation.
 
-0.1.3: Added liquidation price / price rate calculation.
+0.1.3: Add liquidation price / price rate calculation.
 
 0.1.4:
 
-0.1.5: Renamed self.capital to self.balance for compatibility with new jesse.
+0.1.5: Renam self.capital to self.balance for compatibility with new jesse.
+
+0.1.6:
+
+0.1.7:
+
+0.1.8:
+Add pnl to discord wallect message.
 
 ## TODO
 Average entry price mismatch.

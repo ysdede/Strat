@@ -928,8 +928,9 @@ class Strat(Vanilla):
 
     def log_balance_to_dc(self):
         strategy_name = self.__class__.__name__
+        last_trade = self.trades[-1]
         bot_name = f"{self.app_port} {strategy_name} {self.symbol} {self.exchange} {self.leverage}x"
-        msg = f"Balance: {self.initial_balance:0.2f} -> {self.balance:0.2f}"  # TODO: ?''''''''''''''''
+        msg = f"Balance: {self.initial_balance:0.2f} -> {self.balance:0.2f}, Profit: {last_trade.pnl}"
         self.to_discord(self.wallets_dc_hook, bot_name, msg)
 
     def to_discord(self, hook_url=None, username='None', msg='None'):

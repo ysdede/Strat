@@ -216,10 +216,7 @@ class Strat(Vanilla):
         Average entry price is none after restarting the session.
         This is a workaround to avoid crashes.
         """
-        try:
-            return self.average_entry_price
-        except:
-            return 0
+        return self.position.entry_price if is_live else self.average_entry_price
 
     # Metrics related to liquidation calculation
 

@@ -8,6 +8,10 @@ import requests
 from jesse import utils
 from importlib.metadata import version
 
+try:
+    import JesseTradingViewLightReport
+except:
+    pass
 class Strat(Vanilla):
     """
     The proxy strategy class which adds extra methods to Jesse base strategy.
@@ -16,6 +20,8 @@ class Strat(Vanilla):
     def __init__(self):
         super().__init__()
         print(f"Standalone Strategy Template v. {version('strat')}")
+
+        
 
         self.trade_rule_urls = {
             'Binance':         'https://api.binance.com/api/v1/exchangeInfo',
@@ -60,6 +66,8 @@ class Strat(Vanilla):
         self.current_cycle_positions = 0
 
         self.insuff_margin_count = 0
+        self.max_insuff_margin_count = 0
+        self.unique_insuff_margin_count = 0
 
         # Settings:
         self.log_enabled = False
@@ -96,6 +104,9 @@ class Strat(Vanilla):
             self.run_once()
 
     def run_once(self):
+        # Quick fix for Crude Oil rules. Use BTC rules for BCO.
+        self._symbol = self.symbol.replace('BCO-', 'BTC-')
+
         # If exchange rule files are not present or we're trading live, download them
         exc = 'Bybit Perpetual' if self.trade_with_bybit_rules else self.exchange
         local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json".replace('BinanceExch', 'BinanceFuturesExch')
@@ -168,6 +179,7 @@ class Strat(Vanilla):
         self.shared_vars['lp_rate'] = self.lp_rate()
         self.shared_vars['insuff_margin_count'] = self.insuff_margin_count
         # self.shared_vars['max_lp_ratio'] = max(self.shared_vars['max_lp_ratio'], self.lp_rate())
+        self.max_insuff_margin_count = max(self.max_insuff_margin_count, self.insuff_margin_count)
         
 
     def min_order_size(self):
@@ -562,7 +574,7 @@ class Strat(Vanilla):
                 
     def load_bybit_risk_limits(self):
         from pathlib import Path
-        risk_limit_url = f"https://api.bybit.com/public/linear/risk-limit?symbol={self.symbol.replace('-', '')}"
+        risk_limit_url = f"https://api.bybit.com/public/linear/risk-limit?symbol={self._symbol.replace('-', '')}"
 
         if not Path('bybit').exists():
             Path('bybit').mkdir()
@@ -612,7 +624,7 @@ class Strat(Vanilla):
             print(f"Error loading Binance tier brackets from: {fname}")
 
         for i in data:
-            if i['symbol'] == self.symbol.replace('-', ''):
+            if i['symbol'] == self._symbol.replace('-', ''):
                 self.binance_lev_brackets = i['brackets']
                 break
 
@@ -813,7 +825,7 @@ class Strat(Vanilla):
                 data = json.load(f)
 
             for i in data['symbols']:
-                if i['symbol'] == self.symbol.replace('-', '') or self.symbol.replace('-', '') in i['symbol']:
+                if i['symbol'] == self._symbol.replace('-', '') or self._symbol.replace('-', '') in i['symbol']:
                     rules_json = i
                     break
 
@@ -847,7 +859,7 @@ class Strat(Vanilla):
 
         for i in data['result']:
             # TODO: Add USD pairs later!
-            if i['name'] == self.symbol.replace('-', ''):
+            if i['name'] == self._symbol.replace('-', ''):
                 rules_json = i
                 break
 
@@ -1004,6 +1016,8 @@ class Strat(Vanilla):
         return wl
 
     def terminate(self):
+        print(f"Standalone Strategy Template v. {version('strat')}")
+
         try:
             self.test_max_pos_size_vs_leverage()
             print(f"{self.symbol} Max. re-entry: {self.max_open_positions}, "
@@ -1020,8 +1034,15 @@ class Strat(Vanilla):
             print(f"{'Annual/MR':<24}| {self.metrics['annual_return'] / (self.shared_vars['max_margin_ratio'] * 2):0.2f}")
             print(f"{'Shared Max. Total Value':<24}| {self.shared_vars['max_total_value']:0.2f}")
             print(f"{'Max. LP Ratio':<24}| {self.shared_vars['max_lp_ratio']:0.02f}")
-            print(f"{'Insuff. Margin Count':<24}| {self.insuff_margin_count}")
+            # print(f"{'Insuff. Margin Count':<24}| {self.insuff_margin_count}")
+            print(f"{'Insuff. Margin Count':<24}| {self.max_insuff_margin_count}")
+            print(f"{'Trades have Insuff. Margin Count':<24}| {self.unique_insuff_margin_count}")
         except Exception as e:
             print(f"{self.symbol} {e}")
+
+        # try:
+        #     JesseTradingViewLightReport.generateReport()
+        # except Exception as e:
+        #     print(e, 'JesseTradingViewLightReport is not available, skipping...')
         
         # print(self.watch_list())

@@ -30,6 +30,10 @@ Add pnl to discord wallect message.
 0.1.9:
 Add Alex Lau's position.entry_price fix for persistency.
 
+0.2.0:
+Add fix for insufficient margin counts and max insufficent margin counts.
+Add JesseTradingViewLightReport.
+
 ## TODO
 Average entry price mismatch.
 

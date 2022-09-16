@@ -21,7 +21,7 @@ class Strat(Vanilla):
         super().__init__()
         print(f"Standalone Strategy Template v. {version('strat')}")
 
-        
+
 
         self.trade_rule_urls = {
             'Binance':         'https://api.binance.com/api/v1/exchangeInfo',
@@ -367,13 +367,13 @@ class Strat(Vanilla):
     @property
     def LP1(self):
         """LP1 Liquidation Price"""
-        # TODO: We may have open positions and liq price when trading multi routes.
-        #       is_open check commented out for now.
-        # if not self.is_open:
-        #     return float('inf')
-        # LP1 = (self.WB - self.TMM1 + self.UPNL1 + self.cumB + self.cumL + self.cumS - self.Side1BOTH * self.Position1BOTH * self.EP1BOTH - self.Position1LONG * self.EP1LONG + self.Position1SHORT * self.EP1SHORT) / (self.Position1BOTH * self.MMRB + self.Position1LONG * self.MMRL + self.Position1SHORT * self.MMRS - self.Side1BOTH * self.Position1BOTH - self.Position1LONG + self.Position1SHORT)
-        LP1_simple = (self.WB - self.TMM1 + self.UPNL1 + self.cumB - self.Side1BOTH * self.Position1BOTH * self.EP1BOTH) / (self.Position1BOTH * self.MMRB - self.Side1BOTH * self.Position1BOTH)
-        return LP1_simple
+        return (
+            self.WB
+            - self.TMM1
+            + self.UPNL1
+            + self.cumB
+            - self.Side1BOTH * self.Position1BOTH * self.EP1BOTH
+        ) / (self.Position1BOTH * self.MMRB - self.Side1BOTH * self.Position1BOTH)
 
     def liq_price(self) -> float:
         """Liquidation Price (if it's greater than zero)"""
@@ -554,23 +554,19 @@ class Strat(Vanilla):
         """
         if mr < 0 or mr >= self.margin_ratio_treshold:
             msg =   f"Got liqed? Margin Ratio: {mr}%, Avail. margin: {self.available_margin:0.2f}, "\
-                    f"Balance: {self.cap:0.2f} * {self.leverage} = {self.cap * self.leverage:0.2f}, "\
-                    f"Prev. Margin Ratio: {self.shared_vars['margin_ratio']}%, Total value: {self.shared_vars['total_value']}, "\
-                    f"Margin balance: {self.shared_vars['margin_balance']:0.2f}, Maint Margin: {self.shared_vars['maint_margin']:0.2f}, "\
-                    f"{self.div=}, {self.profit_ratio2=:0.2f}, {(int(self.profit_ratio2 + 1) * self.div)=:0.2f}, "\
-                    f"\n{json.dumps(self.shared_vars, indent=4)}\nCaller: {caller}"
+                        f"Balance: {self.cap:0.2f} * {self.leverage} = {self.cap * self.leverage:0.2f}, "\
+                        f"Prev. Margin Ratio: {self.shared_vars['margin_ratio']}%, Total value: {self.shared_vars['total_value']}, "\
+                        f"Margin balance: {self.shared_vars['margin_balance']:0.2f}, Maint Margin: {self.shared_vars['maint_margin']:0.2f}, "\
+                        f"{self.div=}, {self.profit_ratio2=:0.2f}, {(int(self.profit_ratio2 + 1) * self.div)=:0.2f}, "\
+                        f"\n{json.dumps(self.shared_vars, indent=4)}\nCaller: {caller}"
 
             if is_live():
                 self.console(msg)
                 self.terminate()
-            else:
-                # print(msg)
-                
-                # Disabled for going live, any potential bug with this can cause a loss of funds
-                if not self.keep_running_in_case_of_liquidation:
-                    # exit()
-                    self.terminate()
-                    raise Exception(msg)
+            elif not self.keep_running_in_case_of_liquidation:
+                # exit()
+                self.terminate()
+                raise Exception(msg)
                 
     def load_bybit_risk_limits(self):
         from pathlib import Path
@@ -663,10 +659,10 @@ class Strat(Vanilla):
                     r['maintMarginRatio'] = self.fixed_margin_ratio
                 else:
                     r['maintMarginRatio'] = b['maintMarginRatio']
-                
+
                 r['maintAmount'] = b['cum']
                 return r
-                
+
         r['maintMarginRatio'] = 0.75  # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
         r['maintAmount'] = 0
         # print(self.bybit_risk_limits)
@@ -716,7 +712,7 @@ class Strat(Vanilla):
                     r['maintMarginRatio'] = self.fixed_margin_ratio
                 else:
                     r['maintMarginRatio'] = b['maintain_margin']
-                
+
                 # TODO: Calculate for Bybit if available/needed
                 r['maintAmount'] = 0.0
                 return r
@@ -842,8 +838,6 @@ class Strat(Vanilla):
 
     def bybit_rules(self):
         """"Parse Bybit trading rules compatible with Binance Futures."""
-        rules_json = None
-
         rules = {'quantityPrecision': 1, 'pricePrecision': 6,
                  'minQty': 1, 'notional': 0.0001, 'stepSize': 0.1}
 
@@ -857,11 +851,14 @@ class Strat(Vanilla):
             print(f"Error in {local_fn}")
             exit()
 
-        for i in data['result']:
-            # TODO: Add USD pairs later!
-            if i['name'] == self._symbol.replace('-', ''):
-                rules_json = i
-                break
+        rules_json = next(
+            (
+                i
+                for i in data['result']
+                if i['name'] == self._symbol.replace('-', '')
+            ),
+            None,
+        )
 
         if rules_json is None:
             print(f"Error in rules_json. {local_fn}")

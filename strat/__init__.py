@@ -507,7 +507,7 @@ class Strat(Vanilla):
         if mr >= self.margin_ratio_treshold:
             self.shared_vars['margin_alert'] = "True"
             msg = (
-                f"Margin Ratio Alert!: {mr}%, Avail. margin: {round(self.available_margin, 2)}, Balance: {round(self.cap, 2)} * {self.leverage} = {round(self.cap * self.leverage, 2)}, Prev. Margin Ratio: {self.shared_vars['margin_ratio']}%, Total value: {self.shared_vars['total_value']}, Margin balance: {self.shared_vars['margin_balance']}, Maint Margin: {self.shared_vars['maint_margin']}, {self.pos_divider=}, {self.div=}, {self.profit_ratio2=}, {(int(self.profit_ratio2 + 1) * self.div)=}\n{json.dumps(self.shared_vars, indent=4)}\nCaller: {caller}")
+                f"Margin Ratio Alert!: {mr}%, Avail. margin: {round(self.available_margin, 2)}, Balance: {round(self.cap, 2)} * {self.leverage} = {round(self.cap * self.leverage, 2)}, Prev. Margin Ratio: {self.shared_vars['margin_ratio']}%, Total value: {self.shared_vars['total_value']}, Margin balance: {self.shared_vars['margin_balance']}, Maint Margin: {self.shared_vars['maint_margin']}, {self.div=}, {self.profit_ratio2=}, {(int(self.profit_ratio2 + 1) * self.div)=}\n{json.dumps(self.shared_vars, indent=4)}\nCaller: {caller}")
             self.console(msg, False)
         else:
             self.shared_vars['margin_alert'] = "False"
@@ -557,7 +557,7 @@ class Strat(Vanilla):
                     f"Balance: {self.cap:0.2f} * {self.leverage} = {self.cap * self.leverage:0.2f}, "\
                     f"Prev. Margin Ratio: {self.shared_vars['margin_ratio']}%, Total value: {self.shared_vars['total_value']}, "\
                     f"Margin balance: {self.shared_vars['margin_balance']:0.2f}, Maint Margin: {self.shared_vars['maint_margin']:0.2f}, "\
-                    f"{self.pos_divider=}, {self.div=}, {self.profit_ratio2=:0.2f}, {(int(self.profit_ratio2 + 1) * self.div)=:0.2f}, "\
+                    f"{self.div=}, {self.profit_ratio2=:0.2f}, {(int(self.profit_ratio2 + 1) * self.div)=:0.2f}, "\
                     f"\n{json.dumps(self.shared_vars, indent=4)}\nCaller: {caller}"
 
             if is_live():
@@ -732,7 +732,7 @@ class Strat(Vanilla):
         if self.available_margin >= 0:
             return False
         # self.dump_routes_info()
-        self.debug(f"🦆 Negative Margin: {self.available_margin:0.2f}, Balance: {self.cap:0.2f} * {self.leverage} = {self.cap * self.leverage:0.2f}, Margin Ratio: {self.shared_vars['margin_ratio']}%, Total value: {self.shared_vars['total_value']}, Margin balance: {self.shared_vars['margin_balance']}, Maint Margin: {self.shared_vars['maint_margin']} - {self.shared_vars[self.symbol]}, {self.pos_divider=}, {self.div=}, {self.profit_ratio2=} {(int(self.profit_ratio2 + 1) * self.div)=}")
+        self.debug(f"🦆 Negative Margin: {self.available_margin:0.2f}, Balance: {self.cap:0.2f} * {self.leverage} = {self.cap * self.leverage:0.2f}, Margin Ratio: {self.shared_vars['margin_ratio']}%, Total value: {self.shared_vars['total_value']}, Margin balance: {self.shared_vars['margin_balance']}, Maint Margin: {self.shared_vars['maint_margin']} - {self.shared_vars[self.symbol]}, {self.div=}, {self.profit_ratio2=} {(int(self.profit_ratio2 + 1) * self.div)=}")
         return True
 
     def check_avail_margin_vs_capital(self):

@@ -1035,7 +1035,7 @@ class Strat(Vanilla):
             print(f"{'Shared Max. Total Value':<24}| {self.shared_vars['max_total_value']:0.2f}")
             print(f"{'Max. LP Ratio':<24}| {self.shared_vars['max_lp_ratio']:0.02f}")
             # print(f"{'Insuff. Margin Count':<24}| {self.insuff_margin_count}")
-            print(f"{'Insuff. Margin Count':<24}| {self.max_insuff_margin_count}")
+            # print(f"{'Insuff. Margin Count':<24}| {self.max_insuff_margin_count}")
             print(f"{'Trades have Insuff. Margin Count':<24}| {self.unique_insuff_margin_count}")
         except Exception as e:
             print(f"{self.symbol} {e}")

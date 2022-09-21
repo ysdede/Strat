@@ -1,4 +1,5 @@
 import os
+import sys
 import datetime
 from math import log2, log10
 import json
@@ -1040,9 +1041,11 @@ class Strat(Vanilla):
         except Exception as e:
             print(f"{self.symbol} {e}")
 
-        # try:
-        #     JesseTradingViewLightReport.generateReport()
-        # except Exception as e:
-        #     print(e, 'JesseTradingViewLightReport is not available, skipping...')
+        if '--light-reports' in sys.argv:
+            print('\nCreating light reports...')
+            try:
+                JesseTradingViewLightReport.generateReport()
+            except Exception as e:
+                print(e, 'JesseTradingViewLightReport is not available, skipping...')
         
         # print(self.watch_list())

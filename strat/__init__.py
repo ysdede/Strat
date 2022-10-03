@@ -69,6 +69,8 @@ class Strat(Vanilla):
         self.max_insuff_margin_count = 0
         self.unique_insuff_margin_count = 0
 
+        self.resume = False
+
         # Settings:
         self.log_enabled = False
         self.debug_enabled = True
@@ -104,6 +106,15 @@ class Strat(Vanilla):
             self.run_once()
 
     def run_once(self):
+        try:
+            if self.is_open:
+                self.resume = True
+                self.console(f'💾 Found open position at init. Position id: {self.position.id}. Resuming...')
+                self.console(f'{self.position.qty=}, {self.position.value=}')
+                self.load_session_from_pickle()
+        except Exception as e:
+            self.console('Exception when checking open positions.')
+            self.console(e)
         # Quick fix for Crude Oil rules. Use BTC rules for BCO.
         self._symbol = self.symbol.replace('BCO-', 'BTC-')
 
@@ -544,7 +555,7 @@ class Strat(Vanilla):
         if self.shared_vars['max_lp_ratio'] != max_lp_snapshot:
             self.shared_vars['max_lp_ratio_ts'] = self.ts
             msg = f"LP Ratio {max_lp_snapshot:0.2f} -> {self.shared_vars['max_lp_ratio']:0.2f}, Price: {self.close}, Liq. Price: {self.LP1:0.2f}, Caller: {caller}"
-            self.console(msg, False)
+            # self.console(msg, False)
             # self.console(msg)
 
     def check_liquidation(self, mr, caller=None):

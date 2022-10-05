@@ -13,6 +13,19 @@ try:
     import JesseTradingViewLightReport
 except:
     pass
+
+dec = {
+    '0': 0,
+    '0.1': 1,
+    '0.01': 2,
+    '0.001': 3,
+    '0.0001': 4,
+    '0.00001': 5,
+    '0.000001': 6,
+    '0.0000001': 7,
+    '0.00000001': 8,
+}
+
 class Strat(Vanilla):
     """
     The proxy strategy class which adds extra methods to Jesse base strategy.
@@ -26,9 +39,10 @@ class Strat(Vanilla):
         exchange_codes = {'Binance Perpetual Futures': 'Binance Futures', 'Binance Spot': 'Binance', 'Bybit USDT Perpetual': 'Bybit Perpetual', 'FTX Perpetual Futures': 'FTX Futures', 'FTX Spot': 'FTX'}
 
         self.trade_rule_urls = {
-            'Binance':         'https://api.binance.com/api/v1/exchangeInfo',
-            'Binance Futures': 'https://fapi.binance.com/fapi/v1/exchangeInfo',
-            'Bybit Perpetual': 'https://api.bybit.com/v2/public/symbols'
+            'Binance':          'https://api.binance.com/api/v1/exchangeInfo',
+            'Binance Futures':  'https://fapi.binance.com/fapi/v1/exchangeInfo',
+            'Bybit Perpetual':  'https://api.bybit.com/v2/public/symbols',
+            'FTX':              'https://ftx.com/api/markets'
             }
 
         # Trading rules variables
@@ -120,6 +134,12 @@ class Strat(Vanilla):
         # Quick fix for Crude Oil rules. Use BTC rules for BCO.
         self._symbol = self.symbol.replace('BCO-', 'BTC-')
 
+        if self.symbol.endswith('-USD'):
+            self._symbol = self.symbol.replace('-USD', '-USDT')
+
+        if self.symbol.endswith('-PERP'):
+            self._symbol = self.symbol.replace('-PERP', '-USDT')
+
         # If exchange rule files are not present or we're trading live, download them
         exc = 'Bybit Perpetual' if self.trade_with_bybit_rules else self.exchange
         
@@ -131,7 +151,8 @@ class Strat(Vanilla):
                 self.download_rules(exchange='Bybit Perpetual')
             rules = self.bybit_rules()
         elif self.exchange == 'FTX Futures' or self.exchange == 'FTX Perpetual Futures':
-            # ftx perp rules are hardcoded at the ftx_rules method.
+            if not os.path.exists(local_fn) or is_live():
+                self.download_rules(exchange='FTX')
             rules = self.ftx_rules()
         else:
             # Fall back to Binance Perp rules if exchange != bybit or ftx
@@ -814,24 +835,34 @@ class Strat(Vanilla):
         exc = 'Bybit Perpetual' if self.trade_with_bybit_rules else exchange
         local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json"
 
-        try:
-            data = requests.get(self.trade_rule_urls[exc]).json()
-            # Bybit api does not return server time so we need to add it manually using our server time
-            if 'ret_msg' in data and data['ret_msg'] == 'OK':
-                data['serverTime'] = datetime.datetime.now().timestamp() * 1000
-                print('Added local timestamp to Bybit data')
+        # try:
+        data = requests.get(self.trade_rule_urls[exc]).json()
 
-            if int(data['serverTime']):
-                try:
-                    with open(local_fn, 'w') as f:
-                        json.dump(data, f, indent=4)
-                    print(
-                        f"'{exc}' exchange info saved to '{local_fn}'. Server ts: {datetime.datetime.utcfromtimestamp(data['serverTime']/1000)}")
-                except:
-                    print(f"Failed to save {local_fn}")
+        if 'serverTime' not in data.keys():
+            print("if 'serverTime' not in data.keys():")
+            data['serverTime'] = datetime.datetime.now().timestamp() * 1000
 
-        except Exception as e:
-            print(f"Error while fetching data from {exc}. {e}")
+        # Bybit api does not return server time so we need to add it manually using our server time
+        if 'ret_msg' in data and data['ret_msg'] == 'OK':
+            data['serverTime'] = datetime.datetime.now().timestamp() * 1000
+            print('Added local timestamp to Bybit data')
+
+        if 'success' in data and data['success'] == 'true':
+            data['serverTime'] = datetime.datetime.now().timestamp() * 1000
+            print('Added local timestamp to FTX data')
+
+        if int(data['serverTime']):
+            try:
+                with open(local_fn, 'w') as f:
+                    json.dump(data, f, indent=4)
+                print(
+                    f"'{exc}' exchange info saved to '{local_fn}'. Server ts: {datetime.datetime.utcfromtimestamp(data['serverTime']/1000)}")
+            except Exception as e:
+                print(f"Failed to save {local_fn}")
+                print(e)
+
+        # except Exception as e:
+        #     print(f"Error while fetching data from {exc}. {e}")
 
     def binance_rules(self):
         """
@@ -859,7 +890,7 @@ class Strat(Vanilla):
 
         return rules
 
-    def bybit_rules(self):
+    def bybit_rules(self):  # sourcery skip: move-assign-in-block, use-next
         """"Parse Bybit trading rules compatible with Binance Futures."""
         rules_json = None
 
@@ -872,8 +903,9 @@ class Strat(Vanilla):
         try:
             with open(local_fn) as f:
                 data = json.load(f)
-        except Exception:
+        except Exception as e:
             print(f"Error in {local_fn}")
+            print(e)
             exit()
 
         for i in data['result']:
@@ -903,7 +935,85 @@ class Strat(Vanilla):
 
         return rules
 
-    def ftx_rules(self):
+    def ftx_rules(self):  # sourcery skip: move-assign-in-block, use-next
+        """"
+        Parse FTX trading rules compatible with Binance Futures.
+        
+        Example json data for FTX rules:
+        {
+            "name": "ETH-PERP",
+            "enabled": true,
+            "postOnly": false,
+            "priceIncrement": 0.1,
+            "sizeIncrement": 0.001,
+            "minProvideSize": 0.001,
+            "last": 1336.8,
+            "bid": 1336.7,
+            "ask": 1336.8,
+            "price": 1336.8,
+            "type": "future",
+            "futureType": "perpetual",
+            "baseCurrency": null,
+            "isEtfMarket": false,
+            "quoteCurrency": null,
+            "underlying": "ETH",
+            "restricted": false,
+            "highLeverageFeeExempt": true,
+            "largeOrderThreshold": 3000.0,
+            "change1h": 0.00928652321630804,
+            "change24h": -0.01080361107000148,
+            "changeBod": -0.019006384383943642,
+            "quoteVolume24h": 1719986677.1148,
+            "volumeUsd24h": 1719986677.1148,
+            "priceHigh24h": 1370.0,
+            "priceLow24h": 1315.7
+        },
+        """
+        rules_json = None
+
+        rules = {'quantityPrecision': 1, 'pricePrecision': 6, 'minQty': 1, 'notional': 0.0001, 'stepSize': 0.1}
+
+        exc = 'FTX'
+        local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json"
+
+        try:
+            with open(local_fn) as f:
+                data = json.load(f)
+        except Exception as e:
+            print(f"Error in {local_fn}")
+            print(e)
+            exit()
+
+        sym = self.symbol.replace('-USD', '-PERP')
+
+        for i in data['result']:
+            
+            if i['name'] == sym:
+                rules_json = i
+                break
+
+        if rules_json is None:
+            print(f"Error in rules_json. {local_fn}")
+            print(f"Symbol: {self.symbol}")
+            exit()
+
+        # "priceIncrement": 0.1,
+        # "sizeIncrement": 0.001,
+        # "minProvideSize": 0.001,
+        # 'ETH-PERP': {'quantityPrecision': 3, 'pricePrecision': 1, 'minQty': 0.001, 'notional': 0.0001, 'stepSize': 0.001},
+
+        rules['quantityPrecision'] = dec[str(rules_json['sizeIncrement'])]
+        rules['pricePrecision'] = dec[str(rules_json['priceIncrement'])]
+        rules['minQty'] = float(rules_json['minProvideSize'])
+        rules['stepSize'] = float(rules_json['sizeIncrement'])
+
+        #  TODO FTX has no notional rules. ⁉ Just keep it very low to make minQty priority.
+        rules['notional'] = 0.00001
+
+        print('rules:', rules)
+        return rules
+
+    def ftx_rules_hardcode(self):
         """
         BTC-PERP
         "priceIncrement": 1,

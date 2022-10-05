@@ -5,7 +5,7 @@ with open('requirements.txt') as f:
 
 setup(
     name="strat",
-    version='0.2.2',
+    version='0.2.3',
     packages=find_packages(),
     install_requires=required,
 

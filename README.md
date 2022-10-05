@@ -18,14 +18,14 @@ Add liquidation price calculation.
 
 0.1.4:
 
-0.1.5: Renam self.capital to self.balance for compatibility with new jesse.
+0.1.5: Rename self.capital to self.balance for compatibility with new jesse.
 
 0.1.6:
 
 0.1.7:
 
 0.1.8:
-Add pnl to discord wallect message.
+Add pnl to discord wallet message.
 
 0.1.9:
 Add Alex Lau's position.entry_price fix for persistency.
@@ -34,8 +34,6 @@ Add Alex Lau's position.entry_price fix for persistency.
 Add fix for insufficient margin counts and max insufficent margin counts.
 Add JesseTradingViewLightReport.
 
-## TODO
-Average entry price mismatch.
 
 ### Installation
 ```bash

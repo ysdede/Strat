@@ -22,7 +22,8 @@ class Strat(Vanilla):
         super().__init__()
         print(f"Standalone Strategy Template v. {version('strat')}")
 
-        
+        ex_exchanges = ['Binance Futures', 'Binance', 'Bybit Perpetual', 'FTX Futures', 'FTX']
+        exchange_codes = {'Binance Perpetual Futures': 'Binance Futures', 'Binance Spot': 'Binance', 'Bybit USDT Perpetual': 'Bybit Perpetual', 'FTX Perpetual Futures': 'FTX Futures', 'FTX Spot': 'FTX'}
 
         self.trade_rule_urls = {
             'Binance':         'https://api.binance.com/api/v1/exchangeInfo',
@@ -110,13 +111,19 @@ class Strat(Vanilla):
 
         # If exchange rule files are not present or we're trading live, download them
         exc = 'Bybit Perpetual' if self.trade_with_bybit_rules else self.exchange
+        
         local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json".replace('BinanceExch', 'BinanceFuturesExch')
 
-        if self.exchange == 'Bybit Perpetual' or self.trade_with_bybit_rules:
+        # exchange_codes = {'Binance Perpetual Futures': 'Binance Futures', 'Binance Spot': 'Binance', 'Bybit USDT Perpetual': 'Bybit Perpetual', 'FTX Perpetual Futures': 'FTX Futures', 'FTX Spot': 'FTX'}
+        if self.exchange == 'Bybit Perpetual' or self.exchange == 'Bybit USDT Perpetual' or self.trade_with_bybit_rules:
             if not os.path.exists(local_fn) or is_live():
                 self.download_rules(exchange='Bybit Perpetual')
             rules = self.bybit_rules()
+        elif self.exchange == 'FTX Futures' or self.exchange == 'FTX Perpetual Futures':
+            # ftx perp rules are hardcoded at the ftx_rules method.
+            rules = self.ftx_rules()
         else:
+            # Fall back to Binance Perp rules if exchange != bybit or ftx
             if not os.path.exists(local_fn) or is_live():
                 self.download_rules(exchange='Binance Futures')
             rules = self.binance_rules()
@@ -884,6 +891,41 @@ class Strat(Vanilla):
         rules['notional'] = 0.00001
 
         return rules
+
+    def ftx_rules(self):
+        """
+        BTC-PERP
+        "priceIncrement": 1,
+            "sizeIncrement": 0.0001,
+            "minProvideSize": 0.001,
+        
+        ETH-PERP
+        "priceIncrement": 0.1,
+            "sizeIncrement": 0.001,
+            "minProvideSize": 0.001,
+        
+        SOL-PERP
+        "priceIncrement": 0.0025,
+            "sizeIncrement": 0.01,
+            "minProvideSize": 0.01,
+        
+        XMP-PERP
+        "priceIncrement": 0.01,
+            "sizeIncrement": 0.01,
+            "minProvideSize": 0.01,
+        """
+        
+        def_rules = {'quantityPrecision': 1, 'pricePrecision': 6, 'minQty': 1, 'notional': 0.0001, 'stepSize': 0.1}
+
+        rules = {
+            'BTC-PERP': {'quantityPrecision': 4, 'pricePrecision': 0, 'minQty': 0.001, 'notional': 0.0001, 'stepSize': 0.0001},
+            'ETH-PERP': {'quantityPrecision': 3, 'pricePrecision': 1, 'minQty': 0.001, 'notional': 0.0001, 'stepSize': 0.001},
+            'XMR-PERP': {'quantityPrecision': 2, 'pricePrecision': 2, 'minQty': 0.01, 'notional': 0.0001, 'stepSize': 0.01},
+            'SOL-PERP': {'quantityPrecision': 2, 'pricePrecision': 3, 'minQty': 0.01, 'notional': 0.0001, 'stepSize': 0.01}
+        }
+
+        return rules[self.symbol]
+    
 
     # Utility functions
 

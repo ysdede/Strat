@@ -1,0 +1,9 @@
+FTX API:
+Markets
+https://ftx.com/api/markets
+This section covers all types of markets on FTX: spot, perpetual futures, expiring futures, and MOVE contracts.
+Examples for each type are BTC/USD, BTC-PERP, BTC-0626, and BTC-MOVE-1005.
+For futures that expired in 2019, prepend a 2019 to the date, like so: BTC-20190628 or BTC-MOVE-20190923.
+
+https://help.ftx.com/hc/en-us/articles/360027946371-Account-Margin-Management
+

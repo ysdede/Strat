@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 import datetime
@@ -196,6 +197,10 @@ class Strat(Vanilla):
 
         self.first_run = False
 
+    @property
+    def ftx(self):
+        return 'ftx' in self.exchange.lower()
+    
     def update_shared_vars(self, caller=None):
 
         self.shared_vars[self.symbol] = {'active': str(self.active),
@@ -206,9 +211,15 @@ class Strat(Vanilla):
                                         #  'InsufMargin': str(self.available_margin < self.cycle_pos_size * self.boost),
                                          'max_open': self.max_open_positions,
                                          'cycle_pos': round(self.current_cycle_positions, 2),
-                                         'maintenance_margin': round(self.maintenance_margin, 6)}
+                                         'maintenance_margin': round(self.maintenance_margin, 6),
+                                         'collateral_used': round(self.collateral_used, 6) if self.is_open and self.ftx else 0,
+                                         'position_imf': round(self.position_imf, 6) if self.is_open and self.ftx else 0,
+                                         'position_mmf': round(self.position_mmf, 6) if self.is_open and self.ftx else 0,
+                                         'position_notional': round(self.position_notional, 6) if self.is_open and self.ftx else 0,
+                                         }
                                         # We need to store maintenance margin per route to call from other routes. See above. (Needed for Liquidation Price Calculation)
 
+        
         self.max_position_value = max(self.max_position_value, self.shared_vars[self.symbol]['pos_value'])  # Indiviual position value
         self.shared_vars['ts'] = self.ts
         self.shared_vars['total_value'] = self.get_total_value
@@ -442,16 +453,20 @@ class Strat(Vanilla):
         """Calculate the total value of all open positions"""
         tv = 0
 
-        for r in self.routes:
-            try:
-                tv += self.shared_vars[r.symbol]['pos_value']
-                # self.debug(f"+Total Value: {round(tv, 3)}, Pos Value: {self.shared_vars[r.symbol]['pos_value']}")
-            except:
-                # self.debug('Not ready yet! (get_total_value)')
-                pass
+        # If we trade single route use newest the position value.
+        # Reading position value from shared vars may cause a delay. Need to be checked.
 
-        self.shared_vars['max_total_value'] = max(
-            self.shared_vars['max_total_value'], tv)
+        if len(self.routes) > 1:
+            for r in self.routes:
+                try:
+                    tv += self.shared_vars[r.symbol]['pos_value']
+                except Exception:
+                    # self.debug('Not ready yet! (get_total_value)')
+                    pass
+        else:
+            tv = self.position.value
+
+        self.shared_vars['max_total_value'] = max(self.shared_vars['max_total_value'], tv)
 
         return round(tv, 6)
 
@@ -502,6 +517,182 @@ class Strat(Vanilla):
     def margin_balance(self):
         """Calculate the margin balance"""
         return round(self.cap + self.unreal_pnl, 6)
+
+    @property
+    def total_account_value(self) -> float:
+        """
+        FTX ONLY!
+        Total Account Value
+        Total value of the collateral and unrealized PnL within a specific subaccount.
+        Total Account Collateral + Unrealized PnL
+        """
+        return self.margin_balance
+
+    @property
+    def position_notional(self) -> float:
+        """
+        FTX ONLY!
+        Position Notional
+        Notional size of your position in USD
+        Position size * Market price
+        """
+        return self.position.value 
+
+    @property
+    def margin_fraction(self) -> float:
+        """
+        FTX ONLY!
+        After opening the 20 BTC-PERP position, your Margin Fraction is as follows:
+        = Total Account Value / Total Position Notional
+        = $98,750 / $400,000
+        = 24.69%
+        """
+        return round(self.cap / self.position.value, 6)
+
+    @property
+    def maintenance_margin_fraction(self) -> float:
+        """
+        FTX ONLY!
+        Now, let's calculate your Maintenance Margin Fraction to understand at which point
+        the position would start getting liquidated
+        (assuming that’s the only open position in the account.
+        We will explore how multiple positions affect your account's MMF and IMF later on in this example).
+        MMF = max(3%, 0.6 * IMF Factor * sqrt [position open size in tokens]) * MMF Weight
+        = max (3%, 0.6 * 0.002 * sqrt[20] )) * 1
+        = 3%
+        """
+        imfFactor = self.ftx_risk_limits['imfFactor']
+        mmfWeight = self.ftx_risk_limits['mmfWeight']
+        # position open size in tokens = self.position.qty or self.position.value ?
+        return max(0.03, 0.6 * imfFactor * math.sqrt(self.position.value)) * mmfWeight
+
+    @property
+    def max_leverage(self) -> int:
+        """
+        FTX ONLY!
+        Max Leverage
+        Max allowable leverage to open new derivatives or spot margin positions set by the user.
+        A subaccount's max leverage can be adjusted on the profile page under the Margin section.
+        Max allowable leverage on spot margin is 10x.
+
+        Harcoded to 20x for now
+        """
+        return 20
+
+    @property
+    def base_imf(self) -> float:
+        """
+        FTX ONLY!
+        Base IMF
+        The minimum Initial Margin Fraction needed to open a new perpetual swap or futures position.
+        1 / Maximum account leverage set by user
+        """
+        return 1 / self.leverage
+
+    @property
+    def position_imf(self) -> float:
+        """
+        FTX ONLY!
+        Position Initial Margin Fraction
+        (Position IMF)
+        The minimum margin fraction required for a particular derivatives position
+
+        max(Base IMF , IMF Factor * sqrt [position open size in tokens]) * IMF Weight
+        """
+        imfFactor = self.ftx_risk_limits['imfFactor']
+        imfWeight = self.ftx_risk_limits['imfWeight']
+        return max(self.base_imf, imfFactor * math.sqrt(self.position.value)) * imfWeight
+
+    @property
+    def collateral_used(self) -> float:
+        """
+        FTX ONLY!
+        Collateral Used
+        Collateral currently being used by a single derivatives or spot margin position
+        Position IMF * Position Notional
+        """
+    
+        return self.position_imf * self.position_notional
+
+    @property
+    def total_collateral_used(self) -> float:
+        """
+        FTX ONLY!
+        Total Collateral Used
+        Total of collateral being used by all open derivatives or spot margin positions in the subaccount, as well as collateral tied up in open orders, including spot.
+        = sum (Position1 Open Size Notional * Position1 IMF, Position2 Open Size Notional * Position2 IMF,...) + sum(Spot Order1 Size * Mark Price, Spot Order2 Size * Mark Price,...)
+        """
+        
+        tcu = 0
+
+        if len(self.routes) > 1:
+            for r in self.routes:
+                try:
+                    tcu += self.shared_vars[r.symbol]['collateral_used']
+                    # print(f"\nOK! {self.shared_vars[r.symbol]}")
+                except Exception as e:
+                    pass
+                    # self.debug('Not ready yet! (total_collateral_used)')
+        else:
+            tcu = self.collateral_used
+        
+        return round(tcu, 6)
+    
+    @property
+    def position_mmf(self) -> float:
+        """
+        FTX ONLY!
+        Position Maintenance Margin Fraction
+
+        (Position MMF)
+        The minimum margin fraction required to avoid liquidation on a derivatives position
+        max(3%, 0.6 * IMF Factor * sqrt [position open size in tokens]) * MMF Weight
+        """
+
+        return max(0.03, 0.6 * self.ftx_risk_limits['imfFactor'] * math.sqrt(self.position.value)) * self.ftx_risk_limits['mmfWeight']
+    
+
+    @property
+    def total_position_notional(self) -> float:
+        """
+        FTX ONLY!
+        Total Open Position Notional
+
+        The total notional amount in USD of all open derivatives or spot margin positions if your outstanding long or short orders were filled.
+        SUM (Position Open Size1 * Mark Price1, Position Open Size2 * Mark Price2, …)
+        For all positions
+        """
+
+        return self.get_total_value()
+
+
+    @property
+    def account_mmf(self) -> float:
+        """
+        FTX ONLY!
+        Account Maintenance Margin Fraction
+
+        (Account MMF)
+        The minimum account MF needed to avoid getting liquidated, equal to average of positions MMF weighed by the positions notional.
+        Sum ( [ Position Notional / Total Position Notional ] * Position MMF ) of all derivatives and spot margin positions in subaccount
+        """
+        
+        return self.position_notional / self.total_position_notional * self.position_mmf
+
+    @property
+    def free_collateral(self) -> float:
+        """
+        FTX ONLY!
+        Free Collateral
+
+        Total collateral available that can be used for opening new positions and withdrawn from the exchange,
+        excluding collateral locked in open orders or open positions.
+        Total Account Collateral - Total 
+        """
+        mark_price = self.mark_price
+        # TODO: Check
+        return self.margin_balance - self.total_collateral_used
+        
 
     @property
     def maintenance_margin(self):
@@ -843,6 +1034,45 @@ class Strat(Vanilla):
         maintMarginRatio    MMF Weight Multiplier of the margin required to maintain an existing leveraged position
         initialMarginRatio  IMF Weight Multiplier of the margin required to open a new leveraged position TODO: Not used?
 
+        ftx sample:
+        {
+            "name": "1INCH-PERP",
+            "underlying": "1INCH",
+            "description": "1INCH Token Perpetual Futures",
+            "type": "perpetual",
+            "expiry": null,
+            "perpetual": true,
+            "expired": false,
+            "enabled": true,
+            "postOnly": false,
+            "priceIncrement": 0.0001,
+            "sizeIncrement": 1.0,
+            "last": 0.5863,
+            "bid": 0.5862,
+            "ask": 0.5864,
+            "index": 0.5864988666666666,
+            "mark": 0.5865,
+            "imfFactor": 0.0005,
+            "lowerBound": 0.5571,
+            "upperBound": 0.6158,
+            "underlyingDescription": "1INCH Token",
+            "expiryDescription": "Perpetual",
+            "moveStart": null,
+            "marginPrice": 0.5865,
+            "imfWeight": 1.0,
+            "mmfWeight": 1.0,
+            "positionLimitWeight": 20.0,
+            "group": "perpetual",
+            "closeOnly": false,
+            "change1h": 0.0,
+            "change24h": 0.02427523576667831,
+            "changeBod": 0.0022214627477785374,
+            "volumeUsd24h": 2720322.7034,
+            "volume": 4662092.0,
+            "openInterest": 8324331.0,
+            "openInterestUsd": 4882220.1315
+        },
+        IMF Factor	IMF Weight	MMF Weight
         """
         # Term                            Formula                                                         eg: BTCUSDT(Total Position Value 3,200,000 USDT, hence limit needs to increase by 1 time)
         # New Risk Limit(RL) =            RL Base value + (Number of incremental * RL incremental value)  eg. 2,000,000 + (1*2,000,000)= 4,000,000 USDT
@@ -851,6 +1081,8 @@ class Strat(Vanilla):
         # New Maintenance Margin Amount = New MM%* Total Position Value                                   eg. 1% * 3,200,000 = 32,000 USDT
 
         r = {'bracket': 0, 'initialLeverage': 0, 'notionalCap': 0, 'notionalFloor': 0, 'maintMarginRatio': 0.0, 'maint_amount': 0.0}
+        # ftx specific variables
+        f = {'imfFactor': 0.0, 'imfWeight': 0.0, 'mmfWeight': 0.0}
 
         # if psize is None, then use the current position size.
         if psize is None:
@@ -859,29 +1091,15 @@ class Strat(Vanilla):
         if not self.ftx_risk_limits or force_reload:
             self.load_ftx_risk_limits()
 
-        for b in self.ftx_risk_limits:
-            if b["is_lowest_risk"] == 1:
-                rl_base_value = b['limit']
-                mm_base_rate = b['maintain_margin']
-                im_base_rate = b['starting_margin']
-                break
 
-        for b in self.ftx_risk_limits:
-            if psize < b['limit']:
-                r['bracket'] = b['id']
-                r['initialLeverage'] = b['max_leverage']
-                r['notionalCap'] = b['limit']
-                # TODO: Do we really need it? There should be a difference between notionalFloor and previous tier's notionalCap.
-                r['notionalFloor'] = b['limit'] - rl_base_value  #  rl_base_value * (int(b['id']) - 1) IDs are not 1 indexed
-
-                if isinstance(self.fixed_margin_ratio, (float, int)):
-                    r['maintMarginRatio'] = self.fixed_margin_ratio
-                else:
-                    r['maintMarginRatio'] = b['maintain_margin']
-                
-                # TODO: Calculate for Bybit if available/needed
-                r['maintAmount'] = 0.0
-                return r
+        if isinstance(self.fixed_margin_ratio, (float, int)):
+            r['maintMarginRatio'] = self.fixed_margin_ratio
+        else:
+            r['maintMarginRatio'] = b['maintain_margin']
+        
+        # TODO: Calculate for FTX if available/needed
+        r['maintAmount'] = 0.0
+        return r
 
         r['maintMarginRatio'] = 0.10  # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
         r['maintAmount'] = 0
@@ -1176,7 +1394,7 @@ class Strat(Vanilla):
     def cap(self):
         """
         Return available balance (capital)
-        If use initial balance is enabled return initial balance
+        If *use initial balance* is enabled return initial balance
         """
         return self.initial_balance if self.use_initial_balance else self.balance
 

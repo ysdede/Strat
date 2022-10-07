@@ -116,6 +116,7 @@ class Strat(Vanilla):
 
         self.binance_lev_brackets = None
         self.bybit_risk_limits = None
+        self.ftx_risk_limits = None
 
     def before(self) -> None:
         if self.first_run:
@@ -668,7 +669,59 @@ class Strat(Vanilla):
                 self.binance_lev_brackets = i['brackets']
                 break
 
-    
+    def load_ftx_risk_limits(self):
+        from pathlib import Path
+
+        if 'ftx' in self.exchange.lower() and self.symbol.endswith('-USD'):
+            sym = self.symbol.replace('-USD', '-PERP')
+
+        risk_limit_url = "https://ftx.com/api/futures"
+
+        if not Path('ftx').exists():
+            Path('ftx').mkdir()
+
+        fname = "ftx/futures.json"
+
+        print(f"\nLoading risk limits from {fname}")
+
+        try:
+            with open(fname) as f:
+                data = json.load(f)
+        except Exception as e:
+            print(os.listdir())
+            print(
+                f"Can not load ftx risk limit for {sym} from: {fname}")
+            print('Will download from ftx API')
+            
+            try:
+                data = requests.get(risk_limit_url).json()
+                if 'success' in data and data['success'] == 'true':
+                    print(f"Risk limits for {sym} loaded from FTX API")
+                    # print(self.bybit_risk_limits)
+
+                    try:
+                        with open(fname, 'w') as f:
+                            json.dump(data, f, indent=4)
+                        print(
+                            f"'FTX Perpetual' risk limits saved to '{fname}'.")
+                    except:
+                        print(f"Failed to save {fname}")
+            except:
+                print(f"Failed to download {risk_limit_url}")
+                exit()
+        
+        for s in data['result']:
+            if s['name'] == sym:
+                self.ftx_risk_limits = s
+                print(f"Risk limits for {sym} loaded from FTX API")
+                print(self.ftx_risk_limits)
+                break
+
+        if self.ftx_risk_limits is None:
+            print(f"Failed to load risk limits for {sym} from {fname}")
+            exit()
+
+
     def risk_limits(self, psize: float = None, force_reload: bool = False):
         """
         Pick the correct risk limits based on the exchange.
@@ -676,7 +729,17 @@ class Strat(Vanilla):
         psize is the custom position size to calculate futures limits. eg. calculate the max allowed leverage or position size before increasing the order size.
         if psize is None, then use the current position size (self.position.value).
         """
-        return self.binance_limits(psize, force_reload) if 'Binance' in self.exchange and not self.trade_with_bybit_rules else self.bybit_limits(psize, force_reload)
+        # return self.binance_limits(psize, force_reload) if 'Binance' in self.exchange and not self.trade_with_bybit_rules else self.bybit_limits(psize, force_reload)
+        if self.trade_with_bybit_rules:
+            print("Using Bybit risk limits")
+            return self.bybit_limits(psize, force_reload)
+
+        if 'binance' in self.exchange.lower():
+            return self.binance_limits(psize, force_reload)
+        elif 'bybit' in self.exchange.lower():
+            return self.bybit_limits(psize, force_reload)
+        elif 'ftx' in self.exchange.lower():
+            return self.ftx_limits(psize, force_reload)
 
 
     def binance_limits(self, psize=None, force_reload=False):
@@ -745,6 +808,65 @@ class Strat(Vanilla):
                 break
 
         for b in self.bybit_risk_limits:
+            if psize < b['limit']:
+                r['bracket'] = b['id']
+                r['initialLeverage'] = b['max_leverage']
+                r['notionalCap'] = b['limit']
+                # TODO: Do we really need it? There should be a difference between notionalFloor and previous tier's notionalCap.
+                r['notionalFloor'] = b['limit'] - rl_base_value  #  rl_base_value * (int(b['id']) - 1) IDs are not 1 indexed
+
+                if isinstance(self.fixed_margin_ratio, (float, int)):
+                    r['maintMarginRatio'] = self.fixed_margin_ratio
+                else:
+                    r['maintMarginRatio'] = b['maintain_margin']
+                
+                # TODO: Calculate for Bybit if available/needed
+                r['maintAmount'] = 0.0
+                return r
+
+        r['maintMarginRatio'] = 0.10  # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
+        r['maintAmount'] = 0
+        # print(self.bybit_risk_limits)
+        # print(psize)
+        # raise Exception(f"Failed to find risk limits for {self.symbol}")
+        return r  # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
+
+    def ftx_limits(self, psize=None, force_reload=False):
+        """
+        https://help.ftx.com/hc/en-us/articles/360027946371-Account-Margin-Management
+        
+        psize is the custom position size to calculate next limits.
+        eg. calculate the max allowed leverage or position size before increasing the order size.
+
+
+        Generic             FTX Naming
+        maintMarginRatio    MMF Weight Multiplier of the margin required to maintain an existing leveraged position
+        initialMarginRatio  IMF Weight Multiplier of the margin required to open a new leveraged position TODO: Not used?
+
+        """
+        # Term                            Formula                                                         eg: BTCUSDT(Total Position Value 3,200,000 USDT, hence limit needs to increase by 1 time)
+        # New Risk Limit(RL) =            RL Base value + (Number of incremental * RL incremental value)  eg. 2,000,000 + (1*2,000,000)= 4,000,000 USDT
+        # New Maintenance Margin(MM) % =  MM Base rate + (Number of incremental * MM incremental rate)    eg. 0.5% + (1*0.5%)= 1%
+        # New Initial Margin (IM) % =     IM Base rate + (Number of incremental * IM incremental rate)    eg. 1% + (1*0.75%)= 1.75%
+        # New Maintenance Margin Amount = New MM%* Total Position Value                                   eg. 1% * 3,200,000 = 32,000 USDT
+
+        r = {'bracket': 0, 'initialLeverage': 0, 'notionalCap': 0, 'notionalFloor': 0, 'maintMarginRatio': 0.0, 'maint_amount': 0.0}
+
+        # if psize is None, then use the current position size.
+        if psize is None:
+            psize = self.position.value
+
+        if not self.ftx_risk_limits or force_reload:
+            self.load_ftx_risk_limits()
+
+        for b in self.ftx_risk_limits:
+            if b["is_lowest_risk"] == 1:
+                rl_base_value = b['limit']
+                mm_base_rate = b['maintain_margin']
+                im_base_rate = b['starting_margin']
+                break
+
+        for b in self.ftx_risk_limits:
             if psize < b['limit']:
                 r['bracket'] = b['id']
                 r['initialLeverage'] = b['max_leverage']

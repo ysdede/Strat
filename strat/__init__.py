@@ -26,7 +26,30 @@ dec = {
     '0.0000001': 7,
     '0.00000001': 8,
 }
-
+ftx_terms = """
+    Position notional: position size * MP
+    IMF Factor: multiplier on the margin required for a coin.
+    Base IMF: the minimum initial margin fraction needed.  This is 1 / maximum leverage.
+    Position initial margin fraction: max(Base IMF, IMF factor * sqrt(position open size)) * IMF Weight
+    Position maintenance margin fraction: max(3%, 0.6 * IMF Factor * abs(sqrt(position size)))
+    Position unrealized PNL:  size * (future mark price - position entry price)
+    Collateral: See here for more details. 
+    Free collateral: amount of USD that can be withdrawn from exchange, =min(collateral, collateral + unrealized PNL) - [amount of collateral tied up in open orders]
+    Total account value: collateral + unrealized pnl
+    Total position notional: sum of abs(position notional) across all positions + sum of margin borrows
+    Margin fraction [MF]: total account value / total position notional
+    Maintenance Margin Fraction Requirement [MMF]: the minimum MF needed to avoid getting liquidated, equal to average of position MMF weighed by position notional
+    Auto Close Margin Fraction [ACMF]: the minimum MF needed to avoid getting closed against the backstop liquidity provider or other users, = max(MMF / 2, MMF - 0.06)
+    Zero Price (ZP): MP * (1 - MF) if long, MP * (1 + MF) if short.  The mark price that would set an account’s total account value to 0.
+    Liquidation Distance: % move in futures that would make MF = MMF.
+    Position open size: Max(abs(size if all buy orders get filled), abs(size if all sell orders get filled))
+    Position open notional: position open size * MP
+    Total open position notional: sum of abs(position open notional) across all positions
+    Open margin fraction [OMF]: max(0,(min(total account value, collateral)- size from spot margin open orders)) / total open position notional 
+    Initial Margin Fraction Requirement [IMF]: the minimum OMF needed to increase position size, equal to average of position IMF for all account positions weighed by position open notional
+    Unused collateral: max(OMF - IMF, 0) * total open position notional
+    Backstop Liquidity Provider [BLP]: an account that promises to take on liquidating accounts’ positions
+"""
 class Strat(Vanilla):
     """
     The proxy strategy class which adds extra methods to Jesse base strategy.
@@ -216,6 +239,7 @@ class Strat(Vanilla):
                                          'position_imf': round(self.position_imf, 6) if self.is_open and self.ftx else 0,
                                          'position_mmf': round(self.position_mmf, 6) if self.is_open and self.ftx else 0,
                                          'position_notional': round(self.position_notional, 6) if self.is_open and self.ftx else 0,
+                                         'maintenance_collateral': round(self.maintenance_collateral, 6) if self.is_open and self.ftx else 0,
                                          }
                                         # We need to store maintenance margin per route to call from other routes. See above. (Needed for Liquidation Price Calculation)
 
@@ -450,7 +474,10 @@ class Strat(Vanilla):
     # New metrics
     @property
     def get_total_value(self) -> float:
-        """Calculate the total value of all open positions"""
+        """
+        Calculate the total value of all open positions
+        aka Total Position Notional for FTX.
+        """
         tv = 0
 
         # If we trade single route use newest the position value.
@@ -518,6 +545,7 @@ class Strat(Vanilla):
         """Calculate the margin balance"""
         return round(self.cap + self.unreal_pnl, 6)
 
+
     @property
     def total_account_value(self) -> float:
         """
@@ -564,7 +592,7 @@ class Strat(Vanilla):
         imfFactor = self.ftx_risk_limits['imfFactor']
         mmfWeight = self.ftx_risk_limits['mmfWeight']
         # position open size in tokens = self.position.qty or self.position.value ?
-        return max(0.03, 0.6 * imfFactor * math.sqrt(self.position.value)) * mmfWeight
+        return max(0.03, 0.6 * imfFactor * math.sqrt(self.position.qty)) * mmfWeight
 
     @property
     def max_leverage(self) -> int:
@@ -589,19 +617,49 @@ class Strat(Vanilla):
         """
         return 1 / self.leverage
 
+    # @property
+    # def position_imf(self) -> float:
+    #     """
+    #     FTX ONLY!
+    #     Position Initial Margin Fraction
+    #     (Position IMF)
+    #     The minimum margin fraction required for a particular derivatives position
+
+    #     max(Base IMF , IMF Factor * sqrt [position open size in tokens]) * IMF Weight
+    #     """
+    #     imfFactor = self.ftx_risk_limits['imfFactor']
+    #     imfWeight = self.ftx_risk_limits['imfWeight']
+    #     return max(self.base_imf, imfFactor * math.sqrt(self.position.qty)) * imfWeight
+
     @property
     def position_imf(self) -> float:
         """
-        FTX ONLY!
         Position Initial Margin Fraction
-        (Position IMF)
-        The minimum margin fraction required for a particular derivatives position
 
+        (Position IMF)
+        The minimum margin fraction required for a particular derivatives position. 
+        Long positions are capped at 1 plus fees required to exit the position (considering open orders).
+
+        If position is long:
+        min (max[Base IMF , IMF Factor * sqrt {position open size in tokens}] * IMF Weight, 1 + fee rate * [short size + long size] )
+
+        If position is short:
         max(Base IMF , IMF Factor * sqrt [position open size in tokens]) * IMF Weight
         """
-        imfFactor = self.ftx_risk_limits['imfFactor']
-        imfWeight = self.ftx_risk_limits['imfWeight']
-        return max(self.base_imf, imfFactor * math.sqrt(self.position.value)) * imfWeight
+
+        if self.is_long:
+            return min(
+                max(
+                    self.base_imf,
+                    self.ftx_risk_limits['imfFactor'] * math.sqrt(self.position.qty)
+                ) * self.ftx_risk_limits['imfWeight'],
+                1 + self.fee_rate * self.position.qty
+            )
+        if self.is_short:
+            return max(
+                self.base_imf,
+                self.ftx_risk_limits['imfFactor'] * math.sqrt(self.position.qty)
+            ) * self.ftx_risk_limits['imfWeight']
 
     @property
     def collateral_used(self) -> float:
@@ -649,7 +707,7 @@ class Strat(Vanilla):
         max(3%, 0.6 * IMF Factor * sqrt [position open size in tokens]) * MMF Weight
         """
 
-        return max(0.03, 0.6 * self.ftx_risk_limits['imfFactor'] * math.sqrt(self.position.value)) * self.ftx_risk_limits['mmfWeight']
+        return max(0.03, 0.6 * self.ftx_risk_limits['imfFactor'] * math.sqrt(self.position.qty)) * self.ftx_risk_limits['mmfWeight']
     
 
     @property
@@ -659,12 +717,44 @@ class Strat(Vanilla):
         Total Open Position Notional
 
         The total notional amount in USD of all open derivatives or spot margin positions if your outstanding long or short orders were filled.
+
         SUM (Position Open Size1 * Mark Price1, Position Open Size2 * Mark Price2, …)
         For all positions
         """
 
         return self.get_total_value()
 
+    @property
+    def account_imf(self) -> float:
+        """
+        FTX ONLY!
+        Account Initial Margin Fraction
+        (Account IMF)
+
+        The minimum account margin fraction required to increase position size,
+        equal to average of position IMF for all account positions weighed by position open notional
+
+        Sum ( [ Position Notional / Total Position Notional ] * Position IMF )
+        of all derivatives and spot margin positions in subaccount
+
+        Note: Calculate sum of all open positions' imf if we trade multiroutes
+        else just return position_imf
+        """
+        
+        a_imf = 0
+
+        if len(self.routes) > 1:
+            for r in self.routes:
+                try:
+                    a_imf += self.shared_vars[r.symbol]['position_imf']
+                    # print(f"\nOK! {self.shared_vars[r.symbol]}")
+                except Exception as e:
+                    pass
+                    # self.debug('Not ready yet! (account_imf)')
+        else:
+            a_imf = self.position_imf
+        
+        return round(a_imf, 6)
 
     @property
     def account_mmf(self) -> float:
@@ -674,10 +764,24 @@ class Strat(Vanilla):
 
         (Account MMF)
         The minimum account MF needed to avoid getting liquidated, equal to average of positions MMF weighed by the positions notional.
-        Sum ( [ Position Notional / Total Position Notional ] * Position MMF ) of all derivatives and spot margin positions in subaccount
+        Sum ( [ Position Notional / Total Position Notional ] * Position MMF )
+        of all derivatives and spot margin positions in subaccount
         """
         
-        return self.position_notional / self.total_position_notional * self.position_mmf
+        a_mmf = 0
+
+        if len(self.routes) > 1:
+            for r in self.routes:
+                try:
+                    a_mmf += (self.shared_vars[r.symbol]['position_notional'] / self.total_position_notional) * self.shared_vars[r.symbol]['position_mmf']
+                    # print(f"\nOK! {self.shared_vars[r.symbol]}")
+                except Exception as e:
+                    pass
+                    # self.debug('Not ready yet! (account_mmf)')
+        else:
+            a_mmf = (self.position_notional / self.total_position_notional) * self.position_mmf
+        
+        return round(a_mmf, 6)
 
     @property
     def free_collateral(self) -> float:
@@ -692,7 +796,99 @@ class Strat(Vanilla):
         mark_price = self.mark_price
         # TODO: Check
         return self.margin_balance - self.total_collateral_used
+    
+    def acmf(self) -> float:
+        """
+        Auto Close Margin Fraction
+
+        (ACMF)
+        The minimum margin fraction needed to avoid the assets and positions of a given sub being liquidated via backstop liquidity providers.
+        max( Account MMF / 2, Account MMF - 0.06 )
+
+        ACMF is the margin fraction at which your account would be completely liquidated. To calculate this, we use this formula:
+        ACMF = max(MMF / 2, MMF - 0.06)
+        = max( 0.036 / 2, 0.036 - 0.06 )
+        = 1.53%
+
+        So, if your Margin Fraction drops below 1.53%, all of your positions within the subaccount would be instantly liquidated.
+        """
+
+        return max(self.account_mmf / 2, self.account_mmf - 0.06)
+    
+    @property
+    def zero_price(self) -> float:
+        """
+        Zero Price (ZP)
+
+        This is the mark price (MP) that would set a subaccount’s Total Account Value to 0.
+        Zero Price (ZP) is the price that would cause your account to get completely liquidated.
+
+        Mark Price * (1 - Margin Fraction) if long, Mark Price * (1 + Margin Fraction) if short. 
+        """
+
+        if self.is_long:
+            return self.mark_price * (1 - self.margin_fraction)
+        elif self.is_short:
+            return self.mark_price * (1 + self.margin_fraction)
+        else:
+            return float('nan')
+    
+    @property
+    def maintenance_collateral(self) -> float:
+        """
+        Maintenance Collateral
+
+        The amount of collateral needed to avoid liquidation on a derivatives position
+        """
+        return self.position_notional * self.position_mmf
+    
+    @property
+    def account_maintenance_collateral(self) -> float:
+        """
+        Account Maintenance Collateral
+
+        The amount of collateral needed to avoid liquidation on a derivatives position
+        """
+        amc = 0
+
+        if len(self.routes) > 1:
+            for r in self.routes:
+                try:
+                    amc += self.shared_vars[r.symbol]['maintenance_collateral']
+                    # print(f"\nOK! {self.shared_vars[r.symbol]}")
+                except Exception as e:
+                    pass
+                    # self.debug('Not ready yet! (account_maintenance_collateral)')
+        else:
+            amc = self.maintenance_collateral
         
+        return round(amc, 6)
+
+    @property
+    def pmpd(self) -> float:
+        """
+        Position Margin Per Dollar (PMPD)
+
+        Used for calculating Position Zero Price (PZP)
+
+        [(Position maintenance collateral used) / (sum of Position maintenance collateral used for all account positions)] * Total account value / abs(position notional)
+
+        Maintenance collateral = Position notional * Position MMF
+        """
+
+        return (self.maintenance_collateral / self.account_maintenance_collateral) * self.total_account_value / abs(self.position_notional)
+    
+    @property
+    def pzp(self) -> float:
+        """
+        Position Zero Price (PZP)
+
+        The fill price a bankrupted account would receive for a particular position.
+
+        MP * (1 - PMPD) if long, MP * (1 + PMPD) if short
+        """
+
+        return self.mark_price * (1 - self.pmpd) if self.is_long else self.margin_price * (1 + self.pmpd)
 
     @property
     def maintenance_margin(self):

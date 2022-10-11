@@ -49,6 +49,17 @@ ftx_terms = """
     Initial Margin Fraction Requirement [IMF]: the minimum OMF needed to increase position size, equal to average of position IMF for all account positions weighed by position open notional
     Unused collateral: max(OMF - IMF, 0) * total open position notional
     Backstop Liquidity Provider [BLP]: an account that promises to take on liquidating accounts’ positions
+
+    Notes:
+    
+    sum(value1, value2,..) = sum total of the values within the data set provided
+    max(value1, value2,..) = the maximum value within the data set provided
+    min(value1, value2,..) = the minimum value within the data set provided
+    abs(value) = the absolute value of the data provided
+    Open position means that the position has been filled and has not been closed yet. Open order means that that the order has been submitted, but has not been filled yet.
+    Mark price = median of best ask, best bid, and last traded price.
+    Your margin and collateral is segregated per subaccount. Therefore, throughout this article, account = subaccount. 
+    Much of this article is an approximation and ignores details, e.g. fees.
 """
 
 
@@ -201,6 +212,7 @@ class Strat(Vanilla):
         elif self.exchange == "FTX Futures" or self.exchange == "FTX Perpetual Futures":
             if not os.path.exists(local_fn) or is_live():
                 self.download_rules(exchange="FTX")
+                self.ftx_risk_limits = self.risk_limits()
             rules = self.ftx_rules()
         else:
             # Fall back to Binance Perp rules if exchange != bybit or ftx
@@ -506,6 +518,10 @@ class Strat(Vanilla):
     @property
     def LP1(self):
         """LP1 Liquidation Price"""
+
+        # TODO: FTX!
+        if self.ftx:
+            return 0.1
         # TODO: We may have open positions and liq price when trading multi routes.
         #       is_open check commented out for now.
         # if not self.is_open:
@@ -655,6 +671,10 @@ class Strat(Vanilla):
     def maintenance_margin_fraction(self) -> float:
         """
         FTX ONLY!
+        After opening the 20 BTC-PERP position, your Margin Fraction is as follows:
+        = Total Account Value / Total Position Notional
+        = $98,750 / $400,000 = 24.69%
+
         Now, let's calculate your Maintenance Margin Fraction to understand at which point
         the position would start getting liquidated
         (assuming that’s the only open position in the account.
@@ -663,10 +683,9 @@ class Strat(Vanilla):
         = max (3%, 0.6 * 0.002 * sqrt[20] )) * 1
         = 3%
         """
-        imfFactor = self.ftx_risk_limits["imfFactor"]
-        mmfWeight = self.ftx_risk_limits["mmfWeight"]
+        # self.console(f'🥶 self.ftx_risk_limits = {self.ftx_risk_limits}')
         # position open size in tokens = self.position.qty or self.position.value ?
-        return max(0.03, 0.6 * imfFactor * math.sqrt(self.position.qty)) * mmfWeight
+        return max(0.03, 0.6 * self.ftx_risk_limits["imfFactor"] * math.sqrt(self.position.qty)) * self.ftx_risk_limits["mmfWeight"]
 
     @property
     def max_leverage(self) -> int:
@@ -689,7 +708,7 @@ class Strat(Vanilla):
         The minimum Initial Margin Fraction needed to open a new perpetual swap or futures position.
         1 / Maximum account leverage set by user
         """
-        return 1 / self.leverage
+        return round(1 / self.leverage, 3)
 
     # @property
     # def position_imf(self) -> float:
@@ -706,7 +725,7 @@ class Strat(Vanilla):
     #     return max(self.base_imf, imfFactor * math.sqrt(self.position.qty)) * imfWeight
 
     @property
-    def position_imf(self) -> float:
+    def position_imf(self, qty = None) -> float:
         """
         Position Initial Margin Fraction
 
@@ -721,20 +740,23 @@ class Strat(Vanilla):
         max(Base IMF , IMF Factor * sqrt [position open size in tokens]) * IMF Weight
         """
 
+        if qty is None:
+            qty = self.position.qty
+
         if self.is_long:
             return min(
                 max(
                     self.base_imf,
-                    self.ftx_risk_limits["imfFactor"] * math.sqrt(self.position.qty),
+                    self.ftx_risk_limits["imfFactor"] * math.sqrt(qty),
                 )
                 * self.ftx_risk_limits["imfWeight"],
-                1 + self.fee_rate * self.position.qty,
+                1 + self.fee_rate * qty,
             )
         if self.is_short:
             return (
                 max(
                     self.base_imf,
-                    self.ftx_risk_limits["imfFactor"] * math.sqrt(self.position.qty),
+                    self.ftx_risk_limits["imfFactor"] * math.sqrt(qty),
                 )
                 * self.ftx_risk_limits["imfWeight"]
             )
@@ -805,7 +827,7 @@ class Strat(Vanilla):
         For all positions
         """
 
-        return self.get_total_value()
+        return self.get_total_value
 
     @property
     def account_imf(self) -> float:
@@ -885,6 +907,7 @@ class Strat(Vanilla):
         # TODO: Check
         return self.margin_balance - self.total_collateral_used
 
+    @property
     def acmf(self) -> float:
         """
         Auto Close Margin Fraction
@@ -998,6 +1021,9 @@ class Strat(Vanilla):
         To avoid auto-deleveraging, it is highly recommended to close your positions before the
         collateral falls below the Maintenance Margin.
         """
+        if self.ftx:
+            # TODO: FTX!
+            return 0.1
 
         if isinstance(self.fixed_margin_ratio, (float, int)):
             return (
@@ -1162,7 +1188,7 @@ class Strat(Vanilla):
     def load_ftx_risk_limits(self):
         from pathlib import Path
 
-        if "ftx" in self.exchange.lower() and self.symbol.endswith("-USD"):
+        if self.ftx and self.symbol.endswith("-USD"):
             sym = self.symbol.replace("-USD", "-PERP")
 
         risk_limit_url = "https://ftx.com/api/futures"
@@ -1170,7 +1196,7 @@ class Strat(Vanilla):
         if not Path("ftx").exists():
             Path("ftx").mkdir()
 
-        fname = "ftx/futures.json"
+        fname = f"ftx/{sym}.json"
 
         print(f"\nLoading risk limits from {fname}")
 
@@ -1178,24 +1204,24 @@ class Strat(Vanilla):
             with open(fname) as f:
                 data = json.load(f)
         except Exception as e:
-            print(os.listdir())
-            print(f"Can not load ftx risk limit for {sym} from: {fname}")
-            print("Will download from ftx API")
+            print(os.listdir('ftx/'))
+            self.console(f"Can not load ftx risk limit for {sym} from: {fname}. Downloading from ftx API.")
 
             try:
                 data = requests.get(risk_limit_url).json()
                 if "success" in data and data["success"] == "true":
-                    print(f"Risk limits for {sym} loaded from FTX API")
+                    self.console(f"Risk limits for {sym} loaded from FTX API")
                     # print(self.bybit_risk_limits)
 
                     try:
                         with open(fname, "w") as f:
                             json.dump(data, f, indent=4)
-                        print(f"'FTX Perpetual' risk limits saved to '{fname}'.")
+
+                        self.console(f"'FTX Perpetual' risk limits saved to '{fname}'.")
                     except:
-                        print(f"Failed to save {fname}")
+                        self.console(f"‼ Failed to save {fname}")
             except:
-                print(f"Failed to download {risk_limit_url}")
+                self.console(f"Failed to download {risk_limit_url}")
                 exit()
 
         for s in data["result"]:
@@ -1410,25 +1436,28 @@ class Strat(Vanilla):
             psize = self.position.value
 
         if not self.ftx_risk_limits or force_reload:
+            self.console(f"🦊 Loading FTX risk limits for {self.symbol}")
             self.load_ftx_risk_limits()
 
-        if isinstance(self.fixed_margin_ratio, (float, int)):
-            r["maintMarginRatio"] = self.fixed_margin_ratio
-        else:
-            r["maintMarginRatio"] = b["maintain_margin"]
+        # if isinstance(self.fixed_margin_ratio, (float, int)):
+        #     r["maintMarginRatio"] = self.fixed_margin_ratio
+        # else:
+        #     r["maintMarginRatio"] = b["maintain_margin"]
 
-        # TODO: Calculate for FTX if available/needed
-        r["maintAmount"] = 0.0
-        return r
+        # # TODO: Calculate for FTX if available/needed
+        # r["maintAmount"] = 0.0
+        # return r
 
-        r[
-            "maintMarginRatio"
-        ] = 0.10  # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
-        r["maintAmount"] = 0
-        # print(self.bybit_risk_limits)
-        # print(psize)
-        # raise Exception(f"Failed to find risk limits for {self.symbol}")
-        return r  # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
+        # r[
+        #     "maintMarginRatio"
+        # ] = 0.10  # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
+        # r["maintAmount"] = 0
+        # # print(self.bybit_risk_limits)
+        # # print(psize)
+        # # raise Exception(f"Failed to find risk limits for {self.symbol}")
+        # return r  # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
+        # self.console(f'🥶 self.ftx_risk_limits = {self.ftx_risk_limits}')
+        return self.ftx_risk_limits
 
     def check_negative_margin(self):
         if self.available_margin >= 0:
@@ -1467,6 +1496,10 @@ class Strat(Vanilla):
             return False
 
     def test_leverage(self):
+        if self.ftx:
+            # TODO: FTX
+            return True
+
         if (
             self.leverage
             > self.risk_limits(psize=0, force_reload=False)["initialLeverage"]

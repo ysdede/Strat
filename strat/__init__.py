@@ -545,11 +545,13 @@ class Strat(Vanilla):
     # TODO: @property
     def lp_rate(self) -> float:
         """Liquidation Price vs Mark Price rate"""
-        lp = self.zero_price if self.ftx else self.LP1
         if not self.is_open:
             return float(
                 "nan"
             )  # self.LP1 / self.avgEntryPrice if self.avgEntryPrice > 0 else float('nan')
+        
+        lp = self.zero_price if self.ftx else self.LP1
+        
         rate = lp / self.close if self.is_long else self.close / lp
         self.save_max_lp_ratio(rate)
         return rate
@@ -569,6 +571,7 @@ class Strat(Vanilla):
         Calculate the total value of all open positions
         aka Total Position Notional for FTX.
         """
+
         tv = 0
 
         # If we trade single route use newest the position value.
@@ -669,7 +672,7 @@ class Strat(Vanilla):
         = $98,750 / $400,000
         = 24.69%
         """
-        return round(self.cap / self.position.value, 6)
+        return round(self.cap / self.position.value, 6) if self.is_open else float("nan")
 
     @property
     def maintenance_margin_fraction(self) -> float:
@@ -689,7 +692,7 @@ class Strat(Vanilla):
         """
         # self.console(f'🥶 self.ftx_risk_limits = {self.ftx_risk_limits}')
         # position open size in tokens = self.position.qty or self.position.value ?
-        return max(0.03, 0.6 * self.ftx_risk_limits["imfFactor"] * math.sqrt(self.position.qty)) * self.ftx_risk_limits["mmfWeight"]
+        return max(0.03, 0.6 * self.ftx_risk_limits["imfFactor"] * math.sqrt(self.position.qty)) * self.ftx_risk_limits["mmfWeight"] if self.is_open else float("nan")
 
     @property
     def max_leverage(self) -> int:
@@ -745,6 +748,9 @@ class Strat(Vanilla):
         """
 
         if qty is None:
+            if not self.is_open:
+                return float("nan")
+
             qty = self.position.qty
 
         if self.is_long:
@@ -774,7 +780,7 @@ class Strat(Vanilla):
         Position IMF * Position Notional
         """
 
-        return self.position_imf * self.position_notional
+        return self.position_imf * self.position_notional if self.is_open else 0
 
     @property
     def total_collateral_used(self) -> float:
@@ -817,7 +823,7 @@ class Strat(Vanilla):
                 0.6 * self.ftx_risk_limits["imfFactor"] * math.sqrt(self.position.qty),
             )
             * self.ftx_risk_limits["mmfWeight"]
-        )
+        ) if self.is_open else float("nan")
 
     @property
     def total_position_notional(self) -> float:
@@ -831,7 +837,7 @@ class Strat(Vanilla):
         For all positions
         """
 
-        return self.get_total_value
+        return self.get_total_value if self.is_open else 0
 
     @property
     def account_imf(self) -> float:
@@ -876,6 +882,9 @@ class Strat(Vanilla):
         Sum ( [ Position Notional / Total Position Notional ] * Position MMF )
         of all derivatives and spot margin positions in subaccount
         """
+
+        if not self.is_open:
+            return float("nan")
 
         a_mmf = 0
 
@@ -928,7 +937,7 @@ class Strat(Vanilla):
         So, if your Margin Fraction drops below 1.53%, all of your positions within the subaccount would be instantly liquidated.
         """
 
-        return max(self.account_mmf / 2, self.account_mmf - 0.06)
+        return max(self.account_mmf / 2, self.account_mmf - 0.06) if self.is_open else float("nan")
 
     @property
     def zero_price(self) -> float:
@@ -955,7 +964,7 @@ class Strat(Vanilla):
 
         The amount of collateral needed to avoid liquidation on a derivatives position
         """
-        return self.position_notional * self.position_mmf
+        return (self.position_notional * self.position_mmf) if self.is_open else float("nan")
 
     @property
     def account_maintenance_collateral(self) -> float:
@@ -1007,11 +1016,12 @@ class Strat(Vanilla):
         MP * (1 - PMPD) if long, MP * (1 + PMPD) if short
         """
 
-        return (
-            self.mark_price * (1 - self.pmpd)
-            if self.is_long
-            else self.margin_price * (1 + self.pmpd)
-        )
+        if self.is_long:
+            return self.mark_price * (1 - self.pmpd)
+        elif self.is_short:
+            return self.margin_price * (1 + self.pmpd)
+        else:
+            return float("nan")
 
     @property
     def liquidation_distance(self) -> float:
@@ -1028,7 +1038,7 @@ class Strat(Vanilla):
         """
         # return (self.mark_price - self.zero_price) / self.mark_price  # Suggested by @copilot
         # return (self.margin_fraction - self.account_mmf)  # / self.margin_fraction
-        return (self.margin_fraction - self.account_mmf) / self.margin_fraction
+        return (self.margin_fraction - self.account_mmf) / self.margin_fraction if self.is_open else float("nan")
 
 
     @property
@@ -1036,7 +1046,7 @@ class Strat(Vanilla):
         """
         ~ Liquidation Distance: % move in futures that would make MF = MMF.
         """
-        return 1 - self.liquidation_distance
+        return 1 - self.liquidation_distance if self.is_open else float("nan")
 
     @property
     def maintenance_margin(self):
@@ -1926,6 +1936,37 @@ class Strat(Vanilla):
         elif self.log_enabled:
             print(f"{self.ts} {self.symbol} {data}")
 
+    def ftx_watchlist(self) -> list:
+        try:
+            wl = [
+                ("Updated at", self.ts),
+                ("Symbol", self.symbol),
+                ("Margin Fraction", f"{self.margin_fraction:0.3f}%" if self.margin_fraction and self.margin_fraction is not float("nan") else "N/A"),
+                ("Maintenance Margin Fraction", f"{self.maintenance_margin_fraction:0.3f}%" if self.maintenance_margin_fraction and self.maintenance_margin_fraction is not float("nan") else "N/A"),
+                ("Liquidation Distance", f"{self.liquidation_distance:0.4f}%" if self.liquidation_distance and self.liquidation_distance is not float("nan") else "N/A"),
+                ("Inv. Liquidation Distance", f"{self.ld_inverse:0.4f}%" if self.ld_inverse and self.ld_inverse is not float("nan") else "N/A"),
+                ("Base IMF", f"{self.base_imf:0.3f}"),
+                ("Position IMF", f"{self.position_imf:0.3f}" if self.position_imf and self.position_imf is not float("nan") else "N/A"),
+                ("Position MMF", f"{self.position_mmf:0.3f}" if self.position_mmf and self.position_mmf is not float("nan") else "N/A"),
+                ("Collateral Used", f"{self.collateral_used:0.2f}"),
+                ("Total Position Notional", f"{self.total_position_notional:0.2f}"),
+                ("Account MMF", f"{self.account_mmf:0.3f}" if self.account_mmf and self.account_mmf is not float("nan") else "N/A"),
+                ("ACMF", f"{self.acmf:0.3f}" if self.acmf and self.acmf is not float("nan") else "N/A"),
+                ("Zero Price", f"{self.zero_price:0.2f}" if self.zero_price and self.zero_price is not float("nan") else "N/A"),
+                ("Position Zero Price", f"{self.pzp:0.2f}" if self.pzp and self.pzp is not float("nan") else "N/A"),
+                ("Maintenance Collateral", f"{self.maintenance_collateral:0.2f}" if self.maintenance_collateral and self.maintenance_collateral is not float("nan") else "N/A"),
+                ("LP Rate", f"{self.lp_rate():0.3f}" if self.lp_rate() and self.lp_rate() is not float("nan") else "N/A")
+            ]
+        except Exception as e:
+            return [
+                ("Updated at", self.ts),
+                ("Symbol", self.symbol),
+                ("Status", "Watchlist error!"),
+                ("Error", e)
+            ]
+        
+        return wl
+
     def watch_list(self) -> list:
         wl = [("Status", "Not ready.")]
 
@@ -1933,6 +1974,9 @@ class Strat(Vanilla):
             return wl
 
         self.update_shared_vars("Watchlist")
+
+        if self.ftx:
+            return self.ftx_watchlist()
 
         try:
             # self.update_shared_vars('Watchlist')  # Moved method body.
@@ -2027,11 +2071,12 @@ class Strat(Vanilla):
                     else "N/A",
                 ),
             ]
-        except Exception:
-            wl = [
+        except Exception as e:
+            return [
                 ("Updated at", self.ts),
                 ("Symbol", self.symbol),
                 ("Status", "Watchlist error!"),
+                ("Error", e)
             ]
 
         # print(wl)

@@ -253,6 +253,7 @@ class Strat(Vanilla):
         self.shared_vars["margin_balance"] = 0
         self.shared_vars["maint_margin"] = 0
         self.shared_vars["max_total_value"] = 0
+        self.shared_vars["max_margin_ratio_ts"] = None
 
         self.update_shared_vars("runonce")
 
@@ -536,17 +537,20 @@ class Strat(Vanilla):
         ) / (self.Position1BOTH * self.MMRB - self.Side1BOTH * self.Position1BOTH)
         return LP1_simple
 
+    # TODO: @property
     def liq_price(self) -> float:
         """Liquidation Price (if it's greater than zero)"""
         return self.LP1 if self.LP1 > 0 else float("nan")
 
+    # TODO: @property
     def lp_rate(self) -> float:
         """Liquidation Price vs Mark Price rate"""
+        lp = self.zero_price if self.ftx else self.LP1
         if not self.is_open:
             return float(
                 "nan"
             )  # self.LP1 / self.avgEntryPrice if self.avgEntryPrice > 0 else float('nan')
-        rate = self.LP1 / self.close if self.is_long else self.close / self.LP1
+        rate = lp / self.close if self.is_long else self.close / lp
         self.save_max_lp_ratio(rate)
         return rate
 
@@ -1008,6 +1012,31 @@ class Strat(Vanilla):
             if self.is_long
             else self.margin_price * (1 + self.pmpd)
         )
+
+    @property
+    def liquidation_distance(self) -> float:
+        """
+        Liquidation Distance: % move in futures that would make MF = MMF.
+        If you Margin Fraction falls below your Maintenance Margin Fraction, your account will begin to get liquidated.
+
+        MF <= MMF = Liquidation
+        MF > MMF = No liquidation
+        
+        MF : Margin Fraction                self.margin_fraction
+        MMF: Maintenance Margin Fraction    self.account_mmf
+
+        """
+        # return (self.mark_price - self.zero_price) / self.mark_price  # Suggested by @copilot
+        # return (self.margin_fraction - self.account_mmf)  # / self.margin_fraction
+        return (self.margin_fraction - self.account_mmf) / self.margin_fraction
+
+
+    @property
+    def ld_inverse(self) -> float:
+        """
+        ~ Liquidation Distance: % move in futures that would make MF = MMF.
+        """
+        return 1 - self.liquidation_distance
 
     @property
     def maintenance_margin(self):
@@ -2013,7 +2042,17 @@ class Strat(Vanilla):
         print(f"Standalone Strategy Template v. {version('strat')}")
 
         try:
+            # self.console(f'Max. PZP: {self.max_zp}')
+            print(self.ftx_metrics)
+        except Exception:
+            pass
+        
+        try:
             self.test_max_pos_size_vs_leverage()
+        except Exception:
+            self.console("Max. position size vs leverage test failed.")
+
+        try:
             print(
                 f"{self.symbol} Max. re-entry: {self.max_open_positions}, "
                 f"Max. Position Value: {self.max_position_value:0.2f}, "

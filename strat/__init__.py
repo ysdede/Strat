@@ -1273,7 +1273,6 @@ class Strat(Vanilla):
         """
         # return self.binance_limits(psize, force_reload) if 'Binance' in self.exchange and not self.trade_with_bybit_rules else self.bybit_limits(psize, force_reload)
         if self.trade_with_bybit_rules:
-            print("Using Bybit risk limits")
             return self.bybit_limits(psize, force_reload)
 
         if "binance" in self.exchange.lower():

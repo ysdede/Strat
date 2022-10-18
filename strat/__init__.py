@@ -2089,7 +2089,7 @@ class Strat(Vanilla):
             # self.console(f'Max. PZP: {self.max_zp}')
             print(self.ftx_metrics)
         except Exception:
-            pass
+            print("No FTX metrics.")
         
         try:
             self.test_max_pos_size_vs_leverage()

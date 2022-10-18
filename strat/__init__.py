@@ -519,10 +519,11 @@ class Strat(Vanilla):
     @property
     def LP1(self):
         """LP1 Liquidation Price"""
+        if not self.is_open:
+            return float('nan')
 
-        # TODO: FTX!
         if self.ftx:
-            return 0.1
+            return self.close * (1 - (self.margin_fraction - self.maintenance_margin_fraction))
         # TODO: We may have open positions and liq price when trading multi routes.
         #       is_open check commented out for now.
         # if not self.is_open:
@@ -916,7 +917,7 @@ class Strat(Vanilla):
         excluding collateral locked in open orders or open positions.
         Total Account Collateral - Total
         """
-        mark_price = self.mark_price
+        mark_price = self.close
         # TODO: Check
         return self.margin_balance - self.total_collateral_used
 
@@ -951,9 +952,9 @@ class Strat(Vanilla):
         """
 
         if self.is_long:
-            return self.mark_price * (1 - self.margin_fraction)
+            return self.close * (1 - self.margin_fraction)
         elif self.is_short:
-            return self.mark_price * (1 + self.margin_fraction)
+            return self.close * (1 + self.margin_fraction)
         else:
             return float("nan")
 
@@ -1017,7 +1018,7 @@ class Strat(Vanilla):
         """
 
         if self.is_long:
-            return self.mark_price * (1 - self.pmpd)
+            return self.close * (1 - self.pmpd)
         elif self.is_short:
             return self.margin_price * (1 + self.pmpd)
         else:
@@ -1036,7 +1037,7 @@ class Strat(Vanilla):
         MMF: Maintenance Margin Fraction    self.account_mmf
 
         """
-        # return (self.mark_price - self.zero_price) / self.mark_price  # Suggested by @copilot
+        # return (self.close - self.zero_price) / self.close  # Suggested by @copilot
         # return (self.margin_fraction - self.account_mmf)  # / self.margin_fraction
         return (self.margin_fraction - self.account_mmf) / self.margin_fraction if self.is_open else float("nan")
 
@@ -1941,8 +1942,9 @@ class Strat(Vanilla):
             wl = [
                 ("Updated at", self.ts),
                 ("Symbol", self.symbol),
-                ("Margin Fraction", f"{self.margin_fraction:0.3f}%" if self.margin_fraction and self.margin_fraction is not float("nan") else "N/A"),
-                ("Maintenance Margin Fraction", f"{self.maintenance_margin_fraction:0.3f}%" if self.maintenance_margin_fraction and self.maintenance_margin_fraction is not float("nan") else "N/A"),
+                ("Liquidation Price", f"{self.LP1:0.2f}" if self.LP1 is not float("nan") else "N/A"),
+                ("Margin Fraction", f"{self.margin_fraction * 100:0.2f}%" if self.margin_fraction and self.margin_fraction is not float("nan") else "N/A"),
+                ("Maintenance Margin Fraction", f"{self.maintenance_margin_fraction * 100:0.2f}%" if self.maintenance_margin_fraction and self.maintenance_margin_fraction is not float("nan") else "N/A"),
                 ("Liquidation Distance", f"{self.liquidation_distance:0.4f}%" if self.liquidation_distance and self.liquidation_distance is not float("nan") else "N/A"),
                 ("Inv. Liquidation Distance", f"{self.ld_inverse:0.4f}%" if self.ld_inverse and self.ld_inverse is not float("nan") else "N/A"),
                 ("Base IMF", f"{self.base_imf:0.3f}"),
@@ -2089,7 +2091,7 @@ class Strat(Vanilla):
             # self.console(f'Max. PZP: {self.max_zp}')
             print(self.ftx_metrics)
         except Exception:
-            print("No FTX metrics.")
+            pass
         
         try:
             self.test_max_pos_size_vs_leverage()

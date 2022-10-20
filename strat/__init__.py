@@ -9,6 +9,7 @@ from jesse.helpers import is_live
 import requests
 from jesse import utils
 from importlib.metadata import version
+from pathlib import Path
 
 try:
     import JesseTradingViewLightReport
@@ -523,7 +524,11 @@ class Strat(Vanilla):
             return float('nan')
 
         if self.ftx:
-            return self.close * (1 - (self.margin_fraction - self.maintenance_margin_fraction))
+            if self.is_live:
+                MP = self.price  # self.ftx_risk_limits['mark']
+            else:
+                MP = self.price
+            return MP * (1 - (self.margin_fraction - self.maintenance_margin_fraction))
         # TODO: We may have open positions and liq price when trading multi routes.
         #       is_open check commented out for now.
         # if not self.is_open:
@@ -551,7 +556,7 @@ class Strat(Vanilla):
                 "nan"
             )  # self.LP1 / self.avgEntryPrice if self.avgEntryPrice > 0 else float('nan')
         
-        lp = self.zero_price if self.ftx else self.LP1
+        lp = self.LP1
         
         rate = lp / self.close if self.is_long else self.close / lp
         self.save_max_lp_ratio(rate)
@@ -1039,7 +1044,11 @@ class Strat(Vanilla):
         """
         # return (self.close - self.zero_price) / self.close  # Suggested by @copilot
         # return (self.margin_fraction - self.account_mmf)  # / self.margin_fraction
-        return (self.margin_fraction - self.account_mmf) / self.margin_fraction if self.is_open else float("nan")
+        # return (self.margin_fraction - self.account_mmf) / self.margin_fraction if self.is_open else float("nan")
+        # return (self.margin_fraction - self.maintenance_margin_fraction) / self.margin_fraction if self.is_open else float("nan")
+        dist = ((self.close - self.LP1) / self.close) * 100
+        return round(dist, 2)
+
 
 
     @property
@@ -1047,7 +1056,7 @@ class Strat(Vanilla):
         """
         ~ Liquidation Distance: % move in futures that would make MF = MMF.
         """
-        return 1 - self.liquidation_distance if self.is_open else float("nan")
+        return 100 - self.liquidation_distance if self.is_open else float("nan")
 
     @property
     def maintenance_margin(self):
@@ -1226,7 +1235,6 @@ class Strat(Vanilla):
                 break
 
     def load_ftx_risk_limits(self):
-        from pathlib import Path
 
         if self.ftx and self.symbol.endswith("-USD"):
             sym = self.symbol.replace("-USD", "-PERP")
@@ -1238,31 +1246,36 @@ class Strat(Vanilla):
 
         fname = f"ftx/{sym}.json"
 
-        print(f"\nLoading risk limits from {fname}")
+        # print(f"\nLoading risk limits from {fname}")
+
+        # try:
+        #     with open(fname) as f:
+        #         data = json.load(f)
+        # except Exception as e:
+        #     print(os.listdir('ftx/'))
+        #     self.console(f"Can not load ftx risk limit for {sym} from: {fname}. Downloading from ftx API.")
 
         try:
-            with open(fname) as f:
-                data = json.load(f)
-        except Exception as e:
-            print(os.listdir('ftx/'))
-            self.console(f"Can not load ftx risk limit for {sym} from: {fname}. Downloading from ftx API.")
+            data = requests.get(risk_limit_url).json()
+            if "success" in data and data["success"] == "true":
+                self.console(f"Risk limits for {sym} loaded from FTX API")
+                # print(self.bybit_risk_limits)
 
+                try:
+                    with open(fname, "w") as f:
+                        json.dumps(data, f, indent=4)
+                    self.console(f"'FTX Perpetual' risk limits saved to '{fname}'.")
+                except:
+                    self.console(f"‼ Failed to save {fname}")
+        except:
+            self.console(f"Failed to download {risk_limit_url}")
+            self.console(f'Loading recent cached json from {fname} if available.')
             try:
-                data = requests.get(risk_limit_url).json()
-                if "success" in data and data["success"] == "true":
-                    self.console(f"Risk limits for {sym} loaded from FTX API")
-                    # print(self.bybit_risk_limits)
-
-                    try:
-                        with open(fname, "w") as f:
-                            json.dump(data, f, indent=4)
-
-                        self.console(f"'FTX Perpetual' risk limits saved to '{fname}'.")
-                    except:
-                        self.console(f"‼ Failed to save {fname}")
-            except:
-                self.console(f"Failed to download {risk_limit_url}")
-                exit()
+                with open(fname) as f:
+                    data = json.load(f)
+            except Exception as e:
+                self.console(os.listdir('ftx/'))
+                self.console(e)
 
         for s in data["result"]:
             if s["name"] == sym:
@@ -1942,11 +1955,13 @@ class Strat(Vanilla):
             wl = [
                 ("Updated at", self.ts),
                 ("Symbol", self.symbol),
+                ("self.price", self.price),
+                ("Mark Price", self.ftx_risk_limits["mark"]),
                 ("Liquidation Price", f"{self.LP1:0.2f}" if self.LP1 is not float("nan") else "N/A"),
                 ("Margin Fraction", f"{self.margin_fraction * 100:0.2f}%" if self.margin_fraction and self.margin_fraction is not float("nan") else "N/A"),
                 ("Maintenance Margin Fraction", f"{self.maintenance_margin_fraction * 100:0.2f}%" if self.maintenance_margin_fraction and self.maintenance_margin_fraction is not float("nan") else "N/A"),
-                ("Liquidation Distance", f"{self.liquidation_distance:0.4f}%" if self.liquidation_distance and self.liquidation_distance is not float("nan") else "N/A"),
-                ("Inv. Liquidation Distance", f"{self.ld_inverse:0.4f}%" if self.ld_inverse and self.ld_inverse is not float("nan") else "N/A"),
+                ("Liquidation Distance", f"{self.liquidation_distance:0.2f}%" if self.liquidation_distance and self.liquidation_distance is not float("nan") else "N/A"),
+                ("Inv. Liquidation Distance", f"{self.ld_inverse:0.2f}%" if self.ld_inverse and self.ld_inverse is not float("nan") else "N/A"),
                 ("Base IMF", f"{self.base_imf:0.3f}"),
                 ("Position IMF", f"{self.position_imf:0.3f}" if self.position_imf and self.position_imf is not float("nan") else "N/A"),
                 ("Position MMF", f"{self.position_mmf:0.3f}" if self.position_mmf and self.position_mmf is not float("nan") else "N/A"),

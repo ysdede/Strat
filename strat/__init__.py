@@ -211,8 +211,10 @@ class Strat(Vanilla):
                 self.download_rules(exchange="Bybit Perpetual")
             rules = self.bybit_rules()
         elif self.exchange == "FTX Futures" or self.exchange == "FTX Perpetual Futures":
+            print('exchange:', self.exchange)
             if not os.path.exists(local_fn) or is_live():
-                self.download_rules(exchange="FTX")
+                print(f'-----> {local_fn}, {is_live()}')
+                # self.download_rules(exchange="FTX")
                 self.ftx_risk_limits = self.risk_limits()
             rules = self.ftx_rules()
         else:
@@ -524,7 +526,7 @@ class Strat(Vanilla):
             return float('nan')
 
         if self.ftx:
-            if self.is_live:
+            if is_live:
                 MP = self.price  # self.ftx_risk_limits['mark']
             else:
                 MP = self.price
@@ -1785,7 +1787,9 @@ class Strat(Vanilla):
         # 'ETH-PERP': {'quantityPrecision': 3, 'pricePrecision': 1, 'minQty': 0.001, 'notional': 0.0001, 'stepSize': 0.001},
 
         rules["quantityPrecision"] = dec[str(rules_json["sizeIncrement"])]
-        rules["pricePrecision"] = dec[str(rules_json["priceIncrement"])]
+        rules["pricePrecision"] = dec[str(rules_json["priceIncrement"]).replace('05', '1')]
+
+        self.console(f"before: {str(rules_json['priceIncrement'])}, after: {str(rules_json['priceIncrement']).replace('05', '1')}")
         rules["minQty"] = float(rules_json["minProvideSize"])
         rules["stepSize"] = float(rules_json["sizeIncrement"])
 

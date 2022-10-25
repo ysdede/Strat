@@ -11,6 +11,9 @@ from jesse import utils
 from importlib.metadata import version
 from pathlib import Path
 
+# if is_live:
+import pickle
+
 try:
     import JesseTradingViewLightReport
 except:
@@ -105,6 +108,7 @@ class Strat(Vanilla):
         # Kill Switch and break even exit variables
         self.break_even_file = None
         self.pause_file = None
+        self.pause_ap_file = None
 
         # Shared variables
         self.shared_vars["ts"] = 0
@@ -241,6 +245,8 @@ class Strat(Vanilla):
         self.initial_balance = self.balance
         self.break_even_file = f"{self.symbol}.break"
         self.pause_file = f"{self.symbol}.pause"
+        self.pause_ap_file = f"{self.symbol}.pause_ap"
+        self.console(f'⚠️ Pause at profit file name: {self.pause_ap_file}, Pause file name: {self.pause_file}, break even file name: {self.break_even_file}', force=True)
 
         # Init
         self.shared_vars["locked_balance"] = 0
@@ -261,6 +267,23 @@ class Strat(Vanilla):
         self.update_shared_vars("runonce")
 
         self.first_run = False
+
+    def save_session_as_pickle(self):
+        self.console('Saving session as pickle...')
+        try:
+            with open(f'{self.session_file_name}', 'wb') as f:
+                pickle.dump(self.current_state, f)
+        except Exception as e:
+            self.console('Failed to save session.')
+            self.console(e)
+        
+    def load_session_from_pickle(self):
+        self.console('Loading session from pickle')
+        try:
+            with open(f'{self.session_file_name}', 'rb') as f:
+                self.restore_state_vars(pickle.load(f))
+        except Exception as e:
+            self.console(f'Error loading state from {self.session_file_name}')
 
     @property
     def ftx(self):
@@ -1546,7 +1569,14 @@ class Strat(Vanilla):
         try:
             return self.pause_file in os.listdir()
         except:
-            self.console("Exception in checking pause file.")
+            self.console(f"Exception in checking pause file. {self.pause_file}", force=True)
+            return False
+
+    def check_pause_ap(self):
+        try:
+            return self.pause_ap_file in os.listdir()
+        except:
+            self.console(f"Exception in checking pause at profit file. {self.pause_ap_file}", force=True)
             return False
 
     def test_leverage(self):
@@ -1894,8 +1924,8 @@ class Strat(Vanilla):
                 self.current_candle[0] / 1000
             ).strftime("%Y-%m-%d %H:%M:%S")
 
-    def console(self, msg, send_notification=True):
-        if self.log_enabled:
+    def console(self, msg, send_notification=True, force=False):
+        if self.log_enabled or force:
             if is_live():
                 if (
                     version("jesse").split(".")[0] == "0"

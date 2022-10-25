@@ -1073,8 +1073,8 @@ class Strat(Vanilla):
         collateral falls below the Maintenance Margin.
         """
         if self.ftx:
-            # TODO: FTX!
-            return 0.1
+            # TODO: FTX! We should work on this.
+            return self.position.value * self.position_mmf
 
         if isinstance(self.fixed_margin_ratio, (float, int)):
             return (

@@ -1991,6 +1991,7 @@ class Strat(Vanilla):
                 ("Symbol", self.symbol),
                 ("self.price", self.price),
                 ("Mark Price", self.ftx_risk_limits["mark"]),
+                ("Cycle Pos. Size", round(self.cycle_pos_size, 3)),
                 ("Liquidation Price", f"{self.LP1:0.2f}" if self.LP1 is not float("nan") else "N/A"),
                 ("Margin Fraction", f"{self.margin_fraction * 100:0.2f}%" if self.margin_fraction and self.margin_fraction is not float("nan") else "N/A"),
                 ("Maintenance Margin Fraction", f"{self.maintenance_margin_fraction * 100:0.2f}%" if self.maintenance_margin_fraction and self.maintenance_margin_fraction is not float("nan") else "N/A"),

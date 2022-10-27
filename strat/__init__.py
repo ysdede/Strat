@@ -21,6 +21,8 @@ except:
 
 dec = {
     "0": 0,
+    "1": 0,
+    "1.0": 0,
     "0.1": 1,
     "0.01": 2,
     "0.001": 3,
@@ -1781,7 +1783,18 @@ class Strat(Vanilla):
         # 'ETH-PERP': {'quantityPrecision': 3, 'pricePrecision': 1, 'minQty': 0.001, 'notional': 0.0001, 'stepSize': 0.001},
 
         rules["quantityPrecision"] = dec[str(rules_json["sizeIncrement"])]
-        rules["pricePrecision"] = dec[str(rules_json["priceIncrement"]).replace('05', '1')]
+
+        if 'e-' in str(rules_json["priceIncrement"]):
+            places = str(rules_json["priceIncrement"]).split('-')[1]
+            print(places)
+            print(int(places)-1)
+            rules["pricePrecision"] = int(places) - 1  # float(rules_json["priceIncrement"]) # dec[str(rules_json["priceIncrement"]).replace('05', '1')]
+        else:
+            rules["pricePrecision"] = dec[str(rules_json["priceIncrement"]).replace('05', '1')]
+        
+        if self.symbol == 'DOGE-USD' or self.symbol == 'DOGE-PERP':
+            rules["pricePrecision"] = 3
+        
 
         self.console(f"before: {str(rules_json['priceIncrement'])}, after: {str(rules_json['priceIncrement']).replace('05', '1')}")
         rules["minQty"] = float(rules_json["minProvideSize"])

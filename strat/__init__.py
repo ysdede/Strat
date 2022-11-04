@@ -92,6 +92,7 @@ class Strat(Vanilla):
         self.shared_vars["margin_ratio"] = 0
         self.shared_vars["max_total_value"] = 0
         self.shared_vars["run_once_multi_routes"] = True
+        self.shared_vars["max_dd_sim"] = 0
 
         self.max_position_value = 0
         self.active = False
@@ -104,6 +105,8 @@ class Strat(Vanilla):
         self.insuff_margin_count = 0
         self.max_insuff_margin_count = 0
         self.unique_insuff_margin_count = 0
+        self.max_dd_sim = 0
+        self.cycle_initial_balance = 0
 
         self.resume = False
 
@@ -229,10 +232,53 @@ class Strat(Vanilla):
         self.shared_vars["maint_margin"] = 0
         self.shared_vars["max_total_value"] = 0
         self.shared_vars["max_margin_ratio_ts"] = None
+        self.shared_vars["max_dd_sim"] = 0  # Simulated max. drawdown
 
         self.update_shared_vars("runonce")
 
+        self.min_pnl = 0
+
+        self.dd = {'min_pnl_ratio': 0, 'pnl': 0, 'pnl_perc': 0, 'lpr': 0, 'mr_ratio': 0, 'balance': self.balance, 'ts': 0}
+
         self.first_run = False
+
+    @property
+    def wallet_equivalent(self):
+        return self.balance + self.position.pnl # if self.is_open else selfbalance
+    
+    def save_min_pnl(self):
+        if self.position.pnl < 0:
+            pnl_vs_capital = self.position.pnl * 100 / self.balance # Leveraged margin  # does capital include current PNL?
+
+            if pnl_vs_capital < self.dd['min_pnl_ratio']:
+                self.dd['min_pnl_ratio'] = pnl_vs_capital
+                self.dd['pnl'] = self.position.pnl
+                self.dd['pnl_perc'] = self.position.pnl_percentage
+                self.dd['lpr'] = self.lp_rate()
+                self.dd['mr_ratio'] = self.margin_ratio()
+                self.dd['balance'] = self.balance
+                self.dd['pos_size'] = self.position.value
+                self.dd['ts'] = self.ts
+            
+
+    @property
+    def drawdown_simulated(self):
+        """
+        Calculate current drawdown, save max dd simulated.
+        """
+        # if self.wallet_equivalent < self.initial_balance:
+        # if self.wallet_equivalent < self.cycle_initial_balance:
+        #     dd = (self.wallet_equivalent - self.cycle_initial_balance) / self.cycle_initial_balance * 100
+        #     print(f"**** {self.wallet_equivalent=}, {self.cycle_initial_balance=}, {dd=}, {self.balance}, {self.position.value}")
+        #     self.max_dd_sim = min(self.max_dd_sim, dd)
+        #     return dd
+        
+        if self.position.pnl_percentage < 0:
+            dd = self.position.pnl_percentage / self.leverage
+            # print(f"**** {self.wallet_equivalent=}, {self.cycle_initial_balance=}, {dd=}, {self.balance=}, {self.position.value=}, PNL: {self.position.pnl_percentage / self.leverage}%, {self.position.pnl=}")
+            self.max_dd_sim = min(self.max_dd_sim, dd)
+            return dd
+        return 0
 
     def save_session_as_pickle(self):
         self.console('Saving session as pickle...')
@@ -256,6 +302,10 @@ class Strat(Vanilla):
         return "ftx" in self.exchange.lower()
 
     def update_shared_vars(self, caller=None):
+        self.save_min_pnl()
+        # dd_sim = self.drawdown_simulated
+        # print(f'Update shared vars. Caller: {caller}, {self.drawdown_simulated=}, {self.balance=},?{self.wallet_equivalent=}, {self.cycle_initial_balance=}, {self.position.value=}')
+        
 
         self.shared_vars[self.symbol] = {
             "active": str(self.active),
@@ -267,42 +317,30 @@ class Strat(Vanilla):
             "max_open": self.max_open_positions,
             "cycle_pos": round(self.current_cycle_positions, 2),
             "maintenance_margin": round(self.maintenance_margin, 6),
-            "collateral_used": round(self.collateral_used, 6)
-            if self.is_open and self.ftx
-            else 0,
-            "position_imf": round(self.position_imf, 6)
-            if self.is_open and self.ftx
-            else 0,
-            "position_mmf": round(self.position_mmf, 6)
-            if self.is_open and self.ftx
-            else 0,
-            "position_notional": round(self.position_notional, 6)
-            if self.is_open and self.ftx
-            else 0,
-            "maintenance_collateral": round(self.maintenance_collateral, 6)
-            if self.is_open and self.ftx
-            else 0,
+            "collateral_used": round(self.collateral_used, 6) if self.is_open and self.ftx else 0,
+            "position_imf": round(self.position_imf, 6) if self.is_open and self.ftx else 0,
+            "position_mmf": round(self.position_mmf, 6) if self.is_open and self.ftx else 0,
+            "position_notional": round(self.position_notional, 6) if self.is_open and self.ftx else 0,
+            "maintenance_collateral": round(self.maintenance_collateral, 6) if self.is_open and self.ftx else 0,
         }
         # We need to store maintenance margin per route to call from other routes. See above. (Needed for Liquidation Price Calculation)
 
-        self.max_position_value = max(
-            self.max_position_value, self.shared_vars[self.symbol]["pos_value"]
-        )  # Indiviual position value
+        self.max_position_value = max(self.max_position_value, self.shared_vars[self.symbol]["pos_value"])  # Indiviual position value
         self.shared_vars["ts"] = self.ts
         self.shared_vars["total_value"] = self.get_total_value
         self.shared_vars["unrealized_pnl"] = self.unreal_pnl
         self.shared_vars["margin_balance"] = self.margin_balance
         self.shared_vars["maint_margin"] = self.maintenance_margin
         self.shared_vars["margin_ratio"] = self.margin_ratio(caller)
-        self.shared_vars["min_margin"] = min(
-            self.shared_vars["min_margin"], self.available_margin
-        )
+        self.shared_vars["min_margin"] = min(self.shared_vars["min_margin"], self.available_margin)
         self.shared_vars["lp_rate"] = self.lp_rate()
         self.shared_vars["insuff_margin_count"] = self.insuff_margin_count
         # self.shared_vars['max_lp_ratio'] = max(self.shared_vars['max_lp_ratio'], self.lp_rate())
         self.max_insuff_margin_count = max(
             self.max_insuff_margin_count, self.insuff_margin_count
         )
+
+        self.shared_vars["max_dd_sim"] = self.max_dd_sim = min(self.drawdown_simulated, self.shared_vars["max_dd_sim"])
 
     def min_order_size(self):
         """Calculates the minimum order size for the current symbol/exchange rule.
@@ -2153,8 +2191,20 @@ class Strat(Vanilla):
             print(
                 f"{'Trades have Insuff. Margin Count':<24}| {self.unique_insuff_margin_count}"
             )
+            print(f"{'uDD Ratio':<24}| {self.dd['min_pnl_ratio']:0.2f}")
         except Exception as e:
             print(f"{self.symbol} {e}")
+        
+        # try:
+        #     print(f"{'Max. DD simulated':<24}| {self.max_dd_sim:0.2f}")
+        # except Exception as e:
+        #     print(e)
+
+        try:
+            print(self.dd)
+        except Exception as e:
+            print(e)
+
 
         if "--light-reports" in sys.argv:
             print("\nCreating light reports...")

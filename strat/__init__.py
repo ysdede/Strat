@@ -1954,6 +1954,11 @@ class Strat(Vanilla):
     def is_trading(self):
         return is_live()
 
+    def ts_to_str(self, ts):
+        if ts:
+            return datetime.datetime.utcfromtimestamp(ts / 1000).strftime("%Y-%m-%d %H:%M:%S")
+        
+
     @property
     def ts(self):
         if is_live():

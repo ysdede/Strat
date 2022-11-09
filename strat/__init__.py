@@ -224,8 +224,10 @@ class Strat(Vanilla):
         self.break_even_file = f"{self.symbol}.break"
         self.pause_file = f"{self.symbol}.pause"
         self.pause_ap_file = f"{self.symbol}.pause_ap"
+        self.kill_sw_file = "KILL.SWITCH"
+
         self.console(
-            f'INFO: Pause at profit file name: {self.pause_ap_file}, Pause file name: {self.pause_file}, break even file name: {self.break_even_file}', force=True)
+            f'INFO: Break even file name: {self.break_even_file}, Pause at profit file name: {self.pause_ap_file}, Pause file name: {self.pause_file}, Killswitch file name: {self.kill_sw_file} ', force=True)
 
         # Init
         self.shared_vars["locked_balance"] = 0
@@ -1590,12 +1592,41 @@ class Strat(Vanilla):
         )
         return False
 
-    def check_breakeven_or_killswitch(self):
+    # def check_breakeven_or_killswitch(self):
+    #     try:
+    #         return self.break_even_file in os.listdir() or "KILL.SWITCH" in os.listdir()
+    #     except:
+    #         self.console(
+    #             "Exception in checking break even/ks file.
+    #         )
+    #         return False
+
+    def check_breakeven_or_killswitch(self, caller=""):
+        if self.check_breakeven():
+            self.console(f'{self.break_even_file=} file still exits. Caller: {caller}')
+            return True
+        
+        if self.check_killswitch():
+            self.console(f'{self.kill_sw_file=} file still exits. Caller: {caller}')
+            return True
+
+        return False
+
+    def check_breakeven(self):
         try:
-            return self.break_even_file in os.listdir() or "KILL.SWITCH" in os.listdir()
+            return self.break_even_file in os.listdir()
         except:
             self.console(
-                "Exception in checking break even/ks file. (TODO: Add caller.)"
+                f"Exception in checking break even file. {self.break_even_file=}"
+            )
+            return False
+
+    def check_killswitch(self):
+        try:
+            return self.kill_sw_file in os.listdir()
+        except:
+            self.console(
+                f"Exception in checking {self.kill_sw_file=} file."
             )
             return False
 
@@ -2019,6 +2050,7 @@ class Strat(Vanilla):
     def log_metrics_after_closing(self, metrics):
         self.console(f"📈 Initial/Current Balance: {self.initial_balance:0.2f}/{self.balance:0.2f}, current udd: {self.udd:0.2f}, udd stop: {self.udd_stop}, Max udd: {self.dd['min_pnl_ratio']:0.2f}, Max. DD: {metrics['max_drawdown']:0.2f}, Total Fee: {metrics['fee']:0.3f}, Largest Win: {metrics['largest_winning_trade']:0.2f}, Sharpe: {metrics['sharpe_ratio']:0.2f}, Calmar: {metrics['calmar_ratio']:0.2f}")
 
+    
     def log_balance_to_dc(self):
         strategy_name = self.__class__.__name__
         last_trade = self.trades[-1]
@@ -2270,12 +2302,12 @@ class Strat(Vanilla):
         except Exception as e:
             print(e)
 
-        if not self.is_trading and "KILL.SWITCH" in os.listdir():
-            print('Removing KILL.SWITCH file.')
+        if not self.is_trading and self.kill_sw_file in os.listdir():
+            print(f'Removing {self.kill_sw_file=} file.')
             try:
-                os.remove('KILL.SWITCH')
+                os.remove(self.kill_sw_file)
             except Exception as e:
-                print(f'Could not remove KILL.SWITCH\n {e}')
+                print(f'Could not remove {self.kill_sw_file}\n {e}')
 
 
         if "--light-reports" in sys.argv:

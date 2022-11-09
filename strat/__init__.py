@@ -2267,6 +2267,14 @@ class Strat(Vanilla):
         except Exception as e:
             print(e)
 
+        if not self.is_trading and "KILL.SWITCH" in os.listdir():
+            print('Removing KILL.SWITCH file.')
+            try:
+                os.remove('KILL.SWITCH')
+            except Exception as e:
+                print(f'Could not remove KILL.SWITCH\n {e}')
+
+
         if "--light-reports" in sys.argv:
             print("\nCreating light reports...")
             try:

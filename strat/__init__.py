@@ -254,6 +254,14 @@ class Strat(Vanilla):
         self.first_run = False
 
     @property
+    def quote_currency(self):
+        return self.symbol.split('-')[1]
+    
+    @property
+    def base_currency(self):
+        return self.symbol.split('-')[0]
+
+    @property
     def wallet_equivalent(self):
         return self.balance + self.position.pnl  # if self.is_open else selfbalance
 

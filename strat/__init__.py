@@ -2050,7 +2050,6 @@ class Strat(Vanilla):
     def log_metrics_after_closing(self, metrics):
         self.console(f"📈 Initial/Current Balance: {self.initial_balance:0.2f}/{self.balance:0.2f}, current udd: {self.udd:0.2f}, udd stop: {self.udd_stop}, Max udd: {self.dd['min_pnl_ratio']:0.2f}, Max. DD: {metrics['max_drawdown']:0.2f}, Total Fee: {metrics['fee']:0.3f}, Largest Win: {metrics['largest_winning_trade']:0.2f}, Sharpe: {metrics['sharpe_ratio']:0.2f}, Calmar: {metrics['calmar_ratio']:0.2f}")
 
-    
     def log_balance_to_dc(self):
         strategy_name = self.__class__.__name__
         last_trade = self.trades[-1]

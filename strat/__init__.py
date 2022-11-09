@@ -265,6 +265,13 @@ class Strat(Vanilla):
     def wallet_equivalent(self):
         return self.balance + self.position.pnl  # if self.is_open else selfbalance
 
+    @property
+    def udd(self):
+        if self.position.pnl < 0:
+            return self.position.pnl * 100 / self.balance
+        
+        return 0
+
     def save_min_pnl(self):
         if self.position.pnl < 0:
             # Leveraged margin  # does capital include current PNL?

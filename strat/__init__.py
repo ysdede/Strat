@@ -2296,8 +2296,17 @@ class Strat(Vanilla):
                 f"{'Trades have Insuff. Margin Count':<24}| {self.unique_insuff_margin_count}"
             )
             print(f"{'uDD Ratio':<24}| {self.dd['min_pnl_ratio']:0.2f}")
+
         except Exception as e:
             print(f"{self.symbol} {e}")
+        
+        try:
+            if metrics := self.metrics:
+                net_profit_percentage = metrics['net_profit_percentage']
+                profit_per_udd = net_profit_percentage / abs(self.dd['min_pnl_ratio'])
+                print(f"{'ppudd Ratio':<24}| {profit_per_udd:0.2f}")
+        except Exception as e:
+            pass
 
         # try:
         #     print(f"{'Max. DD simulated':<24}| {self.max_dd_sim:0.2f}")

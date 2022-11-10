@@ -189,7 +189,7 @@ class Strat(Vanilla):
             if not os.path.exists(local_fn) or is_live():
                 self.download_rules(exchange="Bybit Perpetual")
             rules = self.bybit_rules()
-        elif self.exchange == "FTX Futures" or self.exchange == "FTX Perpetual Futures":
+        elif self.exchange in ["FTX Futures", "FTX Perpetual Futures"]:
             print('exchange:', self.exchange)
             if not os.path.exists(local_fn) or is_live():
                 print(f'-----> {local_fn}, {is_live()}')
@@ -270,10 +270,7 @@ class Strat(Vanilla):
 
     @property
     def udd(self):
-        if self.position.pnl < 0:
-            return self.position.pnl * 100 / self.balance
-        
-        return 0
+        return self.position.pnl * 100 / self.balance if self.position.pnl < 0 else 0
 
     def save_min_pnl(self):
         if self.position.pnl < 0:
@@ -585,24 +582,15 @@ class Strat(Vanilla):
             return float('nan')
 
         if self.ftx:
-            if is_live:
-                MP = self.price  # self.ftx_risk_limits['mark']
-            else:
-                MP = self.price
+            MP = self.price  # self.ftx_risk_limits['mark']
             return MP * (1 - (self.margin_fraction - self.maintenance_margin_fraction))
-        # TODO: We may have open positions and liq price when trading multi routes.
-        #       is_open check commented out for now.
-        # if not self.is_open:
-        #     return float('inf')
-        # LP1 = (self.WB - self.TMM1 + self.UPNL1 + self.cumB + self.cumL + self.cumS - self.Side1BOTH * self.Position1BOTH * self.EP1BOTH - self.Position1LONG * self.EP1LONG + self.Position1SHORT * self.EP1SHORT) / (self.Position1BOTH * self.MMRB + self.Position1LONG * self.MMRL + self.Position1SHORT * self.MMRS - self.Side1BOTH * self.Position1BOTH - self.Position1LONG + self.Position1SHORT)
-        LP1_simple = (
+        return (
             self.WB
             - self.TMM1
             + self.UPNL1
             + self.cumB
             - self.Side1BOTH * self.Position1BOTH * self.EP1BOTH
         ) / (self.Position1BOTH * self.MMRB - self.Side1BOTH * self.Position1BOTH)
-        return LP1_simple
 
     # TODO: @property
     def liq_price(self) -> float:
@@ -1229,14 +1217,10 @@ class Strat(Vanilla):
             if is_live():
                 self.console(msg)
                 self.terminate()
-            else:
-                # print(msg)
-
-                # Disabled for going live, any potential bug with this can cause a loss of funds
-                if not self.keep_running_in_case_of_liquidation:
-                    # exit()
-                    self.terminate()
-                    raise Exception(msg)
+            elif not self.keep_running_in_case_of_liquidation:
+                # exit()
+                self.terminate()
+                raise Exception(msg)
 
     def load_bybit_risk_limits(self):
         from pathlib import Path
@@ -1817,7 +1801,7 @@ class Strat(Vanilla):
 
         return rules
 
-    def ftx_rules(self):  # sourcery skip: move-assign-in-block, use-next
+    def ftx_rules(self):    # sourcery skip: move-assign-in-block, use-next
         """ "
         Parse FTX trading rules compatible with Binance Futures.
 
@@ -1902,7 +1886,7 @@ class Strat(Vanilla):
             rules["pricePrecision"] = dec[str(
                 rules_json["priceIncrement"]).replace('05', '1')]
 
-        if self.symbol == 'DOGE-USD' or self.symbol == 'DOGE-PERP':
+        if self.symbol in ['DOGE-USD', 'DOGE-PERP']:
             rules["pricePrecision"] = 3
 
         self.console(

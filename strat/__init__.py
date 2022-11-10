@@ -112,6 +112,7 @@ class Strat(Vanilla):
         self.resume = False
 
         # Settings:
+        self.udd_stop_enabled = False  # Disabled by default, if this setting is missing in any strategy it will not perform udd stop.
         self.log_enabled = False
         self.debug_enabled = True
         self.trade_with_bybit_rules = False
@@ -621,6 +622,7 @@ class Strat(Vanilla):
         rate = lp / self.close if self.is_long else self.close / lp
         self.save_max_lp_ratio(rate)
         return rate
+
 
     def print_lp(self):
         if self.LP1 > 0:

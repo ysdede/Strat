@@ -110,9 +110,13 @@ class Strat(Vanilla):
         self.cycle_initial_balance = 0
 
         self.resume = False
+        self.udd_stop_count = 0
+        self.udd_stop_events = []
 
         # Settings:
         self.udd_stop_enabled = False  # Disabled by default, if this setting is missing in any strategy it will not perform udd stop.
+        self.cooldown_len = 2 * 60 * 60 * 1000  # h * m * s * ms
+        self.last_trade_type = None  # 'udd_stop'
         self.log_enabled = False
         self.debug_enabled = True
         self.trade_with_bybit_rules = False
@@ -1609,7 +1613,10 @@ class Strat(Vanilla):
             return True
         
         if self.check_killswitch():
-            self.console(f'{self.kill_sw_file=} file still exits. Caller: {caller}')
+            if not self.is_trading:
+                print('ks.', end='')
+            else:
+                self.console(f'{self.kill_sw_file=} file still exits. Caller: {caller}')
             return True
 
         return False
@@ -2317,6 +2324,12 @@ class Strat(Vanilla):
             print(self.dd)
         except Exception as e:
             print(e)
+
+        try:
+            print(f"{'udd stop Count':<24}| {self.udd_stop_count}")
+            print('udd stop Events: ', self.udd_stop_events)
+        except Exception as e:
+            pass
 
         if not self.is_trading and self.kill_sw_file in os.listdir():
             print(f'Removing {self.kill_sw_file=} file.')

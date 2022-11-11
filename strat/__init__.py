@@ -112,6 +112,7 @@ class Strat(Vanilla):
         self.resume = False
 
         # Settings:
+        self.udd_stop_enabled = False  # Disabled by default, if this setting is missing in any strategy it will not perform udd stop.
         self.log_enabled = False
         self.debug_enabled = True
         self.trade_with_bybit_rules = False
@@ -621,6 +622,7 @@ class Strat(Vanilla):
         rate = lp / self.close if self.is_long else self.close / lp
         self.save_max_lp_ratio(rate)
         return rate
+
 
     def print_lp(self):
         if self.LP1 > 0:
@@ -2294,8 +2296,17 @@ class Strat(Vanilla):
                 f"{'Trades have Insuff. Margin Count':<24}| {self.unique_insuff_margin_count}"
             )
             print(f"{'uDD Ratio':<24}| {self.dd['min_pnl_ratio']:0.2f}")
+
         except Exception as e:
             print(f"{self.symbol} {e}")
+        
+        try:
+            if metrics := self.metrics:
+                net_profit_percentage = metrics['net_profit_percentage']
+                profit_per_udd = net_profit_percentage / abs(self.dd['min_pnl_ratio'])
+                print(f"{'ppudd Ratio':<24}| {profit_per_udd:0.2f}")
+        except Exception as e:
+            pass
 
         # try:
         #     print(f"{'Max. DD simulated':<24}| {self.max_dd_sim:0.2f}")

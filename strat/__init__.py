@@ -43,26 +43,17 @@ class Strat(Vanilla):
         super().__init__()
         print(f"Standalone Strategy Template v. {version('strat')}")
 
-        ex_exchanges = [
-            "Binance Futures",
-            "Binance",
-            "Bybit Perpetual",
-            "FTX Futures",
-            "FTX",
-        ]
+        ex_exchanges = ["Binance Futures", "Binance", "Bybit Perpetual"]
         exchange_codes = {
             "Binance Perpetual Futures": "Binance Futures",
             "Binance Spot": "Binance",
             "Bybit USDT Perpetual": "Bybit Perpetual",
-            "FTX Perpetual Futures": "FTX Futures",
-            "FTX Spot": "FTX",
         }
 
         self.trade_rule_urls = {
             "Binance": "https://api.binance.com/api/v1/exchangeInfo",
             "Binance Futures": "https://fapi.binance.com/fapi/v1/exchangeInfo",
             "Bybit Perpetual": "https://api.bybit.com/v2/public/symbols",
-            "FTX": "https://ftx.com/api/markets",
         }
 
         # Trading rules variables
@@ -146,14 +137,13 @@ class Strat(Vanilla):
 
         self.binance_lev_brackets = None
         self.bybit_risk_limits = None
-        self.ftx_risk_limits = None
 
     def before(self) -> None:
         if self.first_run:
             self.run_once()
 
     def run_once(self):
-        print('--------> RUN ONCE!')
+        print("--------> RUN ONCE!")
         try:
             if self.is_open:
                 self.resume = True
@@ -184,7 +174,6 @@ class Strat(Vanilla):
             "BinanceExch", "BinanceFuturesExch"
         )
 
-        # exchange_codes = {'Binance Perpetual Futures': 'Binance Futures', 'Binance Spot': 'Binance', 'Bybit USDT Perpetual': 'Bybit Perpetual', 'FTX Perpetual Futures': 'FTX Futures', 'FTX Spot': 'FTX'}
         if (
             self.exchange == "Bybit Perpetual"
             or self.exchange == "Bybit USDT Perpetual"
@@ -193,18 +182,8 @@ class Strat(Vanilla):
             if not os.path.exists(local_fn) or is_live():
                 self.download_rules(exchange="Bybit Perpetual")
             rules = self.bybit_rules()
-        elif self.exchange == "FTX Futures" or self.exchange == "FTX Perpetual Futures":
-            print('exchange:', self.exchange)
-            if not os.path.exists(local_fn) or is_live():
-                print(f'-----> {local_fn}, {is_live()}')
-                self.download_rules(exchange="FTX", local_fn=local_fn)
-            else:
-                print(f'Exchange rules file exits: {local_fn}')
-            rules = self.ftx_rules()
-            self.ftx_risk_limits = self.risk_limits()
-            print(f'{self.exchange} Exchange rules for {self.symbol=} {self._symbol=}:\n-----> {rules}')
         else:
-            # Fall back to Binance Perp rules if exchange != bybit or ftx
+            # Fall back to Binance Perp rules if exchange != bybit
             if not os.path.exists(local_fn) or is_live():
                 self.download_rules(exchange="Binance Futures")
             rules = self.binance_rules()
@@ -213,8 +192,7 @@ class Strat(Vanilla):
         self.notional = float(rules["notional"])
         self.stepSize = float(rules["stepSize"])
         self.pricePrecision = int(rules["pricePrecision"])
-        self.quantityPrecision = int(
-            rules["quantityPrecision"])  # Base asset precision
+        self.quantityPrecision = int(rules["quantityPrecision"])  # Base asset precision
 
         self.console(
             f"Rules set for {self.exchange}, Rules Hack: {self.trade_with_bybit_rules}, quantityPrecision:{self.quantityPrecision}, minQty:{self.minQty}, notional:{self.notional} stepSize:{self.stepSize} pricePrecision:{self.pricePrecision}"
@@ -232,7 +210,9 @@ class Strat(Vanilla):
         self.kill_sw_file = "KILL.SWITCH"
 
         self.console(
-            f'INFO: Break even file name: {self.break_even_file}, Pause at profit file name: {self.pause_ap_file}, Pause file name: {self.pause_file}, Killswitch file name: {self.kill_sw_file} ', force=True)
+            f"INFO: Break even file name: {self.break_even_file}, Pause at profit file name: {self.pause_ap_file}, Pause file name: {self.pause_file}, Killswitch file name: {self.kill_sw_file} ",
+            force=True,
+        )
 
         # Init
         self.shared_vars["locked_balance"] = 0
@@ -255,18 +235,25 @@ class Strat(Vanilla):
 
         self.min_pnl = 0
 
-        self.dd = {'min_pnl_ratio': 0, 'pnl': 0, 'pnl_perc': 0,
-                   'lpr': 0, 'mr_ratio': 0, 'balance': self.balance, 'ts': 0}
+        self.dd = {
+            "min_pnl_ratio": 0,
+            "pnl": 0,
+            "pnl_perc": 0,
+            "lpr": 0,
+            "mr_ratio": 0,
+            "balance": self.balance,
+            "ts": 0,
+        }
 
         self.first_run = False
 
     @property
     def quote_currency(self):
-        return self.symbol.split('-')[1]
-    
+        return self.symbol.split("-")[1]
+
     @property
     def base_currency(self):
-        return self.symbol.split('-')[0]
+        return self.symbol.split("-")[0]
 
     @property
     def wallet_equivalent(self):
@@ -276,7 +263,7 @@ class Strat(Vanilla):
     def udd(self):
         if self.position.pnl < 0:
             return self.position.pnl * 100 / self.balance
-        
+
         return 0
 
     def save_min_pnl(self):
@@ -284,15 +271,15 @@ class Strat(Vanilla):
             # Leveraged margin  # does capital include current PNL?
             pnl_vs_capital = self.position.pnl * 100 / self.balance
 
-            if pnl_vs_capital < self.dd['min_pnl_ratio']:
-                self.dd['min_pnl_ratio'] = pnl_vs_capital
-                self.dd['pnl'] = self.position.pnl
-                self.dd['pnl_perc'] = self.position.pnl_percentage
-                self.dd['lpr'] = self.lp_rate()
-                self.dd['mr_ratio'] = self.margin_ratio()
-                self.dd['balance'] = self.balance
-                self.dd['pos_size'] = self.position.value
-                self.dd['ts'] = self.ts
+            if pnl_vs_capital < self.dd["min_pnl_ratio"]:
+                self.dd["min_pnl_ratio"] = pnl_vs_capital
+                self.dd["pnl"] = self.position.pnl
+                self.dd["pnl_perc"] = self.position.pnl_percentage
+                self.dd["lpr"] = self.lp_rate()
+                self.dd["mr_ratio"] = self.margin_ratio()
+                self.dd["balance"] = self.balance
+                self.dd["pos_size"] = self.position.value
+                self.dd["ts"] = self.ts
 
     @property
     def drawdown_simulated(self):
@@ -314,25 +301,21 @@ class Strat(Vanilla):
         return 0
 
     def save_session_as_pickle(self):
-        self.console('Saving session as pickle...')
+        self.console("Saving session as pickle...")
         try:
-            with open(f'{self.session_file_name}', 'wb') as f:
+            with open(f"{self.session_file_name}", "wb") as f:
                 pickle.dump(self.current_state, f)
         except Exception as e:
-            self.console('Failed to save session.')
+            self.console("Failed to save session.")
             self.console(e)
 
     def load_session_from_pickle(self):
-        self.console('Loading session from pickle')
+        self.console("Loading session from pickle")
         try:
-            with open(f'{self.session_file_name}', 'rb') as f:
+            with open(f"{self.session_file_name}", "rb") as f:
                 self.restore_state_vars(pickle.load(f))
         except Exception as e:
-            self.console(f'Error loading state from {self.session_file_name}')
-
-    @property
-    def ftx(self):
-        return "ftx" in self.exchange.lower()
+            self.console(f"Error loading state from {self.session_file_name}")
 
     def update_shared_vars(self, caller=None):
         self.save_min_pnl()
@@ -349,16 +332,12 @@ class Strat(Vanilla):
             "max_open": self.max_open_positions,
             "cycle_pos": round(self.current_cycle_positions, 2),
             "maintenance_margin": round(self.maintenance_margin, 6),
-            "collateral_used": round(self.collateral_used, 6) if self.is_open and self.ftx else 0,
-            "position_imf": round(self.position_imf, 6) if self.is_open and self.ftx else 0,
-            "position_mmf": round(self.position_mmf, 6) if self.is_open and self.ftx else 0,
-            "position_notional": round(self.position_notional, 6) if self.is_open and self.ftx else 0,
-            "maintenance_collateral": round(self.maintenance_collateral, 6) if self.is_open and self.ftx else 0,
         }
         # We need to store maintenance margin per route to call from other routes. See above. (Needed for Liquidation Price Calculation)
 
         self.max_position_value = max(
-            self.max_position_value, self.shared_vars[self.symbol]["pos_value"])  # Indiviual position value
+            self.max_position_value, self.shared_vars[self.symbol]["pos_value"]
+        )  # Indiviual position value
         self.shared_vars["ts"] = self.ts
         self.shared_vars["total_value"] = self.get_total_value
         self.shared_vars["unrealized_pnl"] = self.unreal_pnl
@@ -366,7 +345,8 @@ class Strat(Vanilla):
         self.shared_vars["maint_margin"] = self.maintenance_margin
         self.shared_vars["margin_ratio"] = self.margin_ratio(caller)
         self.shared_vars["min_margin"] = min(
-            self.shared_vars["min_margin"], self.available_margin)
+            self.shared_vars["min_margin"], self.available_margin
+        )
         self.shared_vars["lp_rate"] = self.lp_rate()
         self.shared_vars["insuff_margin_count"] = self.insuff_margin_count
         # self.shared_vars['max_lp_ratio'] = max(self.shared_vars['max_lp_ratio'], self.lp_rate())
@@ -375,7 +355,8 @@ class Strat(Vanilla):
         )
 
         self.shared_vars["max_dd_sim"] = self.max_dd_sim = min(
-            self.drawdown_simulated, self.shared_vars["max_dd_sim"])
+            self.drawdown_simulated, self.shared_vars["max_dd_sim"]
+        )
 
     def min_order_size(self):
         """Calculates the minimum order size for the current symbol/exchange rule.
@@ -586,14 +567,7 @@ class Strat(Vanilla):
     def LP1(self):
         """LP1 Liquidation Price"""
         if not self.is_open:
-            return float('nan')
-
-        if self.ftx:
-            if is_live:
-                MP = self.price  # self.ftx_risk_limits['mark']
-            else:
-                MP = self.price
-            return MP * (1 - (self.margin_fraction - self.maintenance_margin_fraction))
+            return float("nan")
         # TODO: We may have open positions and liq price when trading multi routes.
         #       is_open check commented out for now.
         # if not self.is_open:
@@ -627,7 +601,6 @@ class Strat(Vanilla):
         self.save_max_lp_ratio(rate)
         return rate
 
-
     def print_lp(self):
         if self.LP1 > 0:
             rate = self.LP1 / self.close if self.is_long else self.close / self.LP1
@@ -640,8 +613,7 @@ class Strat(Vanilla):
     @property
     def get_total_value(self) -> float:
         """
-        Calculate the total value of all open positions
-        aka Total Position Notional for FTX.
+        Calculate the total value of all open positions.
         """
 
         tv = 0
@@ -716,414 +688,6 @@ class Strat(Vanilla):
         return round(self.cap + self.unreal_pnl, 6)
 
     @property
-    def total_account_value(self) -> float:
-        """
-        FTX ONLY!
-        Total Account Value
-        Total value of the collateral and unrealized PnL within a specific subaccount.
-        Total Account Collateral + Unrealized PnL
-        """
-        return self.margin_balance
-
-    @property
-    def position_notional(self) -> float:
-        """
-        FTX ONLY!
-        Position Notional
-        Notional size of your position in USD
-        Position size * Market price
-        """
-        return self.position.value
-
-    @property
-    def margin_fraction(self) -> float:
-        """
-        FTX ONLY!
-        After opening the 20 BTC-PERP position, your Margin Fraction is as follows:
-        = Total Account Value / Total Position Notional
-        = $98,750 / $400,000
-        = 24.69%
-        """
-        return round(self.cap / self.position.value, 6) if self.is_open else float("nan")
-
-    @property
-    def maintenance_margin_fraction(self) -> float:
-        """
-        FTX ONLY!
-        After opening the 20 BTC-PERP position, your Margin Fraction is as follows:
-        = Total Account Value / Total Position Notional
-        = $98,750 / $400,000 = 24.69%
-
-        Now, let's calculate your Maintenance Margin Fraction to understand at which point
-        the position would start getting liquidated
-        (assuming that’s the only open position in the account.
-        We will explore how multiple positions affect your account's MMF and IMF later on in this example).
-        MMF = max(3%, 0.6 * IMF Factor * sqrt [position open size in tokens]) * MMF Weight
-        = max (3%, 0.6 * 0.002 * sqrt[20] )) * 1
-        = 3%
-        """
-        # self.console(f'🥶 self.ftx_risk_limits = {self.ftx_risk_limits}')
-        # position open size in tokens = self.position.qty or self.position.value ?
-        return max(0.03, 0.6 * self.ftx_risk_limits["imfFactor"] * math.sqrt(self.position.qty)) * self.ftx_risk_limits["mmfWeight"] if self.is_open else float("nan")
-
-    @property
-    def max_leverage(self) -> int:
-        """
-        FTX ONLY!
-        Max Leverage
-        Max allowable leverage to open new derivatives or spot margin positions set by the user.
-        A subaccount's max leverage can be adjusted on the profile page under the Margin section.
-        Max allowable leverage on spot margin is 10x.
-
-        Harcoded to 20x for now
-        """
-        return 20
-
-    @property
-    def base_imf(self) -> float:
-        """
-        FTX ONLY!
-        Base IMF
-        The minimum Initial Margin Fraction needed to open a new perpetual swap or futures position.
-        1 / Maximum account leverage set by user
-        """
-        return round(1 / self.leverage, 3)
-
-    # @property
-    # def position_imf(self) -> float:
-    #     """
-    #     FTX ONLY!
-    #     Position Initial Margin Fraction
-    #     (Position IMF)
-    #     The minimum margin fraction required for a particular derivatives position
-
-    #     max(Base IMF , IMF Factor * sqrt [position open size in tokens]) * IMF Weight
-    #     """
-    #     imfFactor = self.ftx_risk_limits['imfFactor']
-    #     imfWeight = self.ftx_risk_limits['imfWeight']
-    #     return max(self.base_imf, imfFactor * math.sqrt(self.position.qty)) * imfWeight
-
-    @property
-    def position_imf(self, qty=None) -> float:
-        """
-        Position Initial Margin Fraction
-
-        (Position IMF)
-        The minimum margin fraction required for a particular derivatives position.
-        Long positions are capped at 1 plus fees required to exit the position (considering open orders).
-
-        If position is long:
-        min (max[Base IMF , IMF Factor * sqrt {position open size in tokens}] * IMF Weight, 1 + fee rate * [short size + long size] )
-
-        If position is short:
-        max(Base IMF , IMF Factor * sqrt [position open size in tokens]) * IMF Weight
-        """
-
-        if qty is None:
-            if not self.is_open:
-                return float("nan")
-
-            qty = self.position.qty
-
-        if self.is_long:
-            return min(
-                max(
-                    self.base_imf,
-                    self.ftx_risk_limits["imfFactor"] * math.sqrt(qty),
-                )
-                * self.ftx_risk_limits["imfWeight"],
-                1 + self.fee_rate * qty,
-            )
-        if self.is_short:
-            return (
-                max(
-                    self.base_imf,
-                    self.ftx_risk_limits["imfFactor"] * math.sqrt(qty),
-                )
-                * self.ftx_risk_limits["imfWeight"]
-            )
-
-    @property
-    def collateral_used(self) -> float:
-        """
-        FTX ONLY!
-        Collateral Used
-        Collateral currently being used by a single derivatives or spot margin position
-        Position IMF * Position Notional
-        """
-
-        return self.position_imf * self.position_notional if self.is_open else 0
-
-    @property
-    def total_collateral_used(self) -> float:
-        """
-        FTX ONLY!
-        Total Collateral Used
-        Total of collateral being used by all open derivatives or spot margin positions in the subaccount, as well as collateral tied up in open orders, including spot.
-        = sum (Position1 Open Size Notional * Position1 IMF, Position2 Open Size Notional * Position2 IMF,...) + sum(Spot Order1 Size * Mark Price, Spot Order2 Size * Mark Price,...)
-        """
-
-        tcu = 0
-
-        if len(self.routes) > 1:
-            for r in self.routes:
-                try:
-                    tcu += self.shared_vars[r.symbol]["collateral_used"]
-                    # print(f"\nOK! {self.shared_vars[r.symbol]}")
-                except Exception as e:
-                    pass
-                    # self.debug('Not ready yet! (total_collateral_used)')
-        else:
-            tcu = self.collateral_used
-
-        return round(tcu, 6)
-
-    @property
-    def position_mmf(self) -> float:
-        """
-        FTX ONLY!
-        Position Maintenance Margin Fraction
-
-        (Position MMF)
-        The minimum margin fraction required to avoid liquidation on a derivatives position
-        max(3%, 0.6 * IMF Factor * sqrt [position open size in tokens]) * MMF Weight
-        """
-
-        return (
-            max(
-                0.03,
-                0.6 * self.ftx_risk_limits["imfFactor"] *
-                math.sqrt(self.position.qty),
-            )
-            * self.ftx_risk_limits["mmfWeight"]
-        ) if self.is_open else float("nan")
-
-    @property
-    def total_position_notional(self) -> float:
-        """
-        FTX ONLY!
-        Total Open Position Notional
-
-        The total notional amount in USD of all open derivatives or spot margin positions if your outstanding long or short orders were filled.
-
-        SUM (Position Open Size1 * Mark Price1, Position Open Size2 * Mark Price2, …)
-        For all positions
-        """
-
-        return self.get_total_value if self.is_open else 0
-
-    @property
-    def account_imf(self) -> float:
-        """
-        FTX ONLY!
-        Account Initial Margin Fraction
-        (Account IMF)
-
-        The minimum account margin fraction required to increase position size,
-        equal to average of position IMF for all account positions weighed by position open notional
-
-        Sum ( [ Position Notional / Total Position Notional ] * Position IMF )
-        of all derivatives and spot margin positions in subaccount
-
-        Note: Calculate sum of all open positions' imf if we trade multiroutes
-        else just return position_imf
-        """
-
-        a_imf = 0
-
-        if len(self.routes) > 1:
-            for r in self.routes:
-                try:
-                    a_imf += self.shared_vars[r.symbol]["position_imf"]
-                    # print(f"\nOK! {self.shared_vars[r.symbol]}")
-                except Exception as e:
-                    pass
-                    # self.debug('Not ready yet! (account_imf)')
-        else:
-            a_imf = self.position_imf
-
-        return round(a_imf, 6)
-
-    @property
-    def account_mmf(self) -> float:
-        """
-        FTX ONLY!
-        Account Maintenance Margin Fraction
-
-        (Account MMF)
-        The minimum account MF needed to avoid getting liquidated, equal to average of positions MMF weighed by the positions notional.
-        Sum ( [ Position Notional / Total Position Notional ] * Position MMF )
-        of all derivatives and spot margin positions in subaccount
-        """
-
-        if not self.is_open:
-            return float("nan")
-
-        a_mmf = 0
-
-        if len(self.routes) > 1:
-            for r in self.routes:
-                try:
-                    a_mmf += (
-                        self.shared_vars[r.symbol]["position_notional"]
-                        / self.total_position_notional
-                    ) * self.shared_vars[r.symbol]["position_mmf"]
-                    # print(f"\nOK! {self.shared_vars[r.symbol]}")
-                except Exception as e:
-                    pass
-                    # self.debug('Not ready yet! (account_mmf)')
-        else:
-            a_mmf = (
-                self.position_notional / self.total_position_notional
-            ) * self.position_mmf
-
-        return round(a_mmf, 6)
-
-    @property
-    def free_collateral(self) -> float:
-        """
-        FTX ONLY!
-        Free Collateral
-
-        Total collateral available that can be used for opening new positions and withdrawn from the exchange,
-        excluding collateral locked in open orders or open positions.
-        Total Account Collateral - Total
-        """
-        mark_price = self.close
-        # TODO: Check
-        return self.margin_balance - self.total_collateral_used
-
-    @property
-    def acmf(self) -> float:
-        """
-        Auto Close Margin Fraction
-
-        (ACMF)
-        The minimum margin fraction needed to avoid the assets and positions of a given sub being liquidated via backstop liquidity providers.
-        max( Account MMF / 2, Account MMF - 0.06 )
-
-        ACMF is the margin fraction at which your account would be completely liquidated. To calculate this, we use this formula:
-        ACMF = max(MMF / 2, MMF - 0.06)
-        = max( 0.036 / 2, 0.036 - 0.06 )
-        = 1.53%
-
-        So, if your Margin Fraction drops below 1.53%, all of your positions within the subaccount would be instantly liquidated.
-        """
-
-        return max(self.account_mmf / 2, self.account_mmf - 0.06) if self.is_open else float("nan")
-
-    @property
-    def zero_price(self) -> float:
-        """
-        Zero Price (ZP)
-
-        This is the mark price (MP) that would set a subaccount’s Total Account Value to 0.
-        Zero Price (ZP) is the price that would cause your account to get completely liquidated.
-
-        Mark Price * (1 - Margin Fraction) if long, Mark Price * (1 + Margin Fraction) if short.
-        """
-
-        if self.is_long:
-            return self.close * (1 - self.margin_fraction)
-        elif self.is_short:
-            return self.close * (1 + self.margin_fraction)
-        else:
-            return float("nan")
-
-    @property
-    def maintenance_collateral(self) -> float:
-        """
-        Maintenance Collateral
-
-        The amount of collateral needed to avoid liquidation on a derivatives position
-        """
-        return (self.position_notional * self.position_mmf) if self.is_open else float("nan")
-
-    @property
-    def account_maintenance_collateral(self) -> float:
-        """
-        Account Maintenance Collateral
-
-        The amount of collateral needed to avoid liquidation on a derivatives position
-        """
-        amc = 0
-
-        if len(self.routes) > 1:
-            for r in self.routes:
-                try:
-                    amc += self.shared_vars[r.symbol]["maintenance_collateral"]
-                    # print(f"\nOK! {self.shared_vars[r.symbol]}")
-                except Exception as e:
-                    pass
-                    # self.debug('Not ready yet! (account_maintenance_collateral)')
-        else:
-            amc = self.maintenance_collateral
-
-        return round(amc, 6)
-
-    @property
-    def pmpd(self) -> float:
-        """
-        Position Margin Per Dollar (PMPD)
-
-        Used for calculating Position Zero Price (PZP)
-
-        [(Position maintenance collateral used) / (sum of Position maintenance collateral used for all account positions)] * Total account value / abs(position notional)
-
-        Maintenance collateral = Position notional * Position MMF
-        """
-
-        return (
-            (self.maintenance_collateral / self.account_maintenance_collateral)
-            * self.total_account_value
-            / abs(self.position_notional)
-        )
-
-    @property
-    def pzp(self) -> float:
-        """
-        Position Zero Price (PZP)
-
-        The fill price a bankrupted account would receive for a particular position.
-
-        MP * (1 - PMPD) if long, MP * (1 + PMPD) if short
-        """
-
-        if self.is_long:
-            return self.close * (1 - self.pmpd)
-        elif self.is_short:
-            return self.margin_price * (1 + self.pmpd)
-        else:
-            return float("nan")
-
-    @property
-    def liquidation_distance(self) -> float:
-        """
-        Liquidation Distance: % move in futures that would make MF = MMF.
-        If you Margin Fraction falls below your Maintenance Margin Fraction, your account will begin to get liquidated.
-
-        MF <= MMF = Liquidation
-        MF > MMF = No liquidation
-
-        MF : Margin Fraction                self.margin_fraction
-        MMF: Maintenance Margin Fraction    self.account_mmf
-
-        """
-        # return (self.close - self.zero_price) / self.close  # Suggested by @copilot
-        # return (self.margin_fraction - self.account_mmf)  # / self.margin_fraction
-        # return (self.margin_fraction - self.account_mmf) / self.margin_fraction if self.is_open else float("nan")
-        # return (self.margin_fraction - self.maintenance_margin_fraction) / self.margin_fraction if self.is_open else float("nan")
-        dist = ((self.close - self.LP1) / self.close) * 100
-        return round(dist, 2)
-
-    @property
-    def ld_inverse(self) -> float:
-        """
-        ~ Liquidation Distance: % move in futures that would make MF = MMF.
-        """
-        return 100 - self.liquidation_distance if self.is_open else float("nan")
-
-    @property
     def maintenance_margin(self):
         """
         Calculate the maintenance margin
@@ -1135,9 +699,6 @@ class Strat(Vanilla):
         To avoid auto-deleveraging, it is highly recommended to close your positions before the
         collateral falls below the Maintenance Margin.
         """
-        if self.ftx:
-            # TODO: FTX! We should work on this.
-            return self.position.value * self.position_mmf
 
         if isinstance(self.fixed_margin_ratio, (float, int)):
             return (
@@ -1260,16 +821,14 @@ class Strat(Vanilla):
                 self.bybit_risk_limits = data["result"]
         except Exception as e:
             print(os.listdir())
-            print(
-                f"Can not load Bybit risk limit for {self.symbol} from: {fname}")
+            print(f"Can not load Bybit risk limit for {self.symbol} from: {fname}")
             print("Will download from Bybit API")
 
             try:
                 data = requests.get(risk_limit_url).json()
                 if "ret_msg" in data and data["ret_msg"] == "OK":
                     self.bybit_risk_limits = data["result"]
-                    print(
-                        f"Risk limits for {self.symbol} loaded from Bybit API")
+                    print(f"Risk limits for {self.symbol} loaded from Bybit API")
                     # print(self.bybit_risk_limits)
 
                     try:
@@ -1302,57 +861,6 @@ class Strat(Vanilla):
                 self.binance_lev_brackets = i["brackets"]
                 break
 
-    def load_ftx_risk_limits(self):
-        src = 'cache'
-        if self.ftx and self.symbol.endswith("-USD"):
-            sym = self.symbol.replace("-USD", "-PERP")
-
-        risk_limit_url = "https://ftx.com/api/futures"
-
-        if not Path("ftx").exists():
-            Path("ftx").mkdir()
-
-        fname = f"ftx/{sym}.json"
-
-        print(f"\nLoading risk limits from {fname}")
-
-        try:
-            with open(fname) as f:
-                data = json.load(f)
-                # print(data)
-        except Exception as e:
-            print(os.listdir('ftx/'))
-            print(
-                f"Can not load ftx risk limit for {sym} from: {fname}. Downloading from ftx API.")
-
-            try:
-                data = requests.get(risk_limit_url).json()
-                if "success" in data and data["success"] == "true":
-                    print(f"Risk limits for {sym} loaded from FTX API")
-                    src = 'API'
-                    # print(self.bybit_risk_limits)
-
-                    try:
-                        with open(fname, "w") as f:
-                            json.dumps(data, f, indent=4)
-                        print(
-                            f"'FTX Perpetual' risk limits saved to '{fname}'.")
-                    except:
-                        print(f"‼ Failed to save {fname}")
-            except:
-                print(f"Failed to download {risk_limit_url}")
-
-        for s in data["result"]:
-            if s["name"] == sym:
-                self.ftx_risk_limits = s
-                print(f"Risk limits for {sym} loaded from {src}")
-                print(self.ftx_risk_limits)
-                break
-
-        if self.ftx_risk_limits is None:
-            print(f"Failed to load risk limits for {sym} from {fname}")
-            exit()
-
     def risk_limits(self, psize: float = None, force_reload: bool = False):
         """
         Pick the correct risk limits based on the exchange.
@@ -1368,8 +876,11 @@ class Strat(Vanilla):
             return self.binance_limits(psize, force_reload)
         elif "bybit" in self.exchange.lower():
             return self.bybit_limits(psize, force_reload)
-        elif "ftx" in self.exchange.lower():
-            return self.ftx_limits(psize, force_reload)
+        else:
+            print(
+                f"Unknown exchange: {self.exchange}, loading Binance limits as default"
+            )
+            return self.binance_limits(psize, force_reload)
 
     def binance_limits(self, psize=None, force_reload=False):
         """psize is the custom position size to calculate next limits.
@@ -1481,103 +992,6 @@ class Strat(Vanilla):
         # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
         return r
 
-    def ftx_limits(self, psize=None, force_reload=False):
-        """
-        https://help.ftx.com/hc/en-us/articles/360027946371-Account-Margin-Management
-
-        psize is the custom position size to calculate next limits.
-        eg. calculate the max allowed leverage or position size before increasing the order size.
-
-
-        Generic             FTX Naming
-        maintMarginRatio    MMF Weight Multiplier of the margin required to maintain an existing leveraged position
-        initialMarginRatio  IMF Weight Multiplier of the margin required to open a new leveraged position TODO: Not used?
-
-        ftx sample:
-        {
-            "name": "1INCH-PERP",
-            "underlying": "1INCH",
-            "description": "1INCH Token Perpetual Futures",
-            "type": "perpetual",
-            "expiry": null,
-            "perpetual": true,
-            "expired": false,
-            "enabled": true,
-            "postOnly": false,
-            "priceIncrement": 0.0001,
-            "sizeIncrement": 1.0,
-            "last": 0.5863,
-            "bid": 0.5862,
-            "ask": 0.5864,
-            "index": 0.5864988666666666,
-            "mark": 0.5865,
-            "imfFactor": 0.0005,
-            "lowerBound": 0.5571,
-            "upperBound": 0.6158,
-            "underlyingDescription": "1INCH Token",
-            "expiryDescription": "Perpetual",
-            "moveStart": null,
-            "marginPrice": 0.5865,
-            "imfWeight": 1.0,
-            "mmfWeight": 1.0,
-            "positionLimitWeight": 20.0,
-            "group": "perpetual",
-            "closeOnly": false,
-            "change1h": 0.0,
-            "change24h": 0.02427523576667831,
-            "changeBod": 0.0022214627477785374,
-            "volumeUsd24h": 2720322.7034,
-            "volume": 4662092.0,
-            "openInterest": 8324331.0,
-            "openInterestUsd": 4882220.1315
-        },
-        IMF Factor	IMF Weight	MMF Weight
-        """
-        # Term                            Formula                                                         eg: BTCUSDT(Total Position Value 3,200,000 USDT, hence limit needs to increase by 1 time)
-        # New Risk Limit(RL) =            RL Base value + (Number of incremental * RL incremental value)  eg. 2,000,000 + (1*2,000,000)= 4,000,000 USDT
-        # New Maintenance Margin(MM) % =  MM Base rate + (Number of incremental * MM incremental rate)    eg. 0.5% + (1*0.5%)= 1%
-        # New Initial Margin (IM) % =     IM Base rate + (Number of incremental * IM incremental rate)    eg. 1% + (1*0.75%)= 1.75%
-        # New Maintenance Margin Amount = New MM%* Total Position Value                                   eg. 1% * 3,200,000 = 32,000 USDT
-
-        r = {
-            "bracket": 0,
-            "initialLeverage": 0,
-            "notionalCap": 0,
-            "notionalFloor": 0,
-            "maintMarginRatio": 0.0,
-            "maint_amount": 0.0,
-        }
-        # ftx specific variables
-        f = {"imfFactor": 0.0, "imfWeight": 0.0, "mmfWeight": 0.0}
-
-        # if psize is None, then use the current position size.
-        if psize is None:
-            psize = self.position.value
-
-        if not self.ftx_risk_limits or force_reload:
-            self.console(f"🦊 Loading FTX risk limits for {self.symbol}")
-            self.load_ftx_risk_limits()
-
-        # if isinstance(self.fixed_margin_ratio, (float, int)):
-        #     r["maintMarginRatio"] = self.fixed_margin_ratio
-        # else:
-        #     r["maintMarginRatio"] = b["maintain_margin"]
-
-        # # TODO: Calculate for FTX if available/needed
-        # r["maintAmount"] = 0.0
-        # return r
-
-        # r[
-        #     "maintMarginRatio"
-        # ] = 0.10  # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
-        # r["maintAmount"] = 0
-        # # print(self.bybit_risk_limits)
-        # # print(psize)
-        # # raise Exception(f"Failed to find risk limits for {self.symbol}")
-        # return r  # TODO: Bybit jsons are missing the last tiers' maintenance margin! Calculate next tiers.
-        # self.console(f'🥶 self.ftx_risk_limits = {self.ftx_risk_limits}')
-        return self.ftx_risk_limits
-
     def check_negative_margin(self):
         if self.available_margin >= 0:
             return False
@@ -1609,14 +1023,14 @@ class Strat(Vanilla):
 
     def check_breakeven_or_killswitch(self, caller=""):
         if self.check_breakeven():
-            self.console(f'{self.break_even_file=} file still exits. Caller: {caller}')
+            self.console(f"{self.break_even_file=} file still exits. Caller: {caller}")
             return True
-        
+
         if self.check_killswitch():
             if not self.is_trading:
-                print('ks.', end='')
+                print("ks.", end="")
             else:
-                self.console(f'{self.kill_sw_file=} file still exits. Caller: {caller}')
+                self.console(f"{self.kill_sw_file=} file still exits. Caller: {caller}")
             return True
 
         return False
@@ -1634,9 +1048,7 @@ class Strat(Vanilla):
         try:
             return self.kill_sw_file in os.listdir()
         except:
-            self.console(
-                f"Exception in checking {self.kill_sw_file=} file."
-            )
+            self.console(f"Exception in checking {self.kill_sw_file=} file.")
             return False
 
     def check_pause(self):
@@ -1644,7 +1056,8 @@ class Strat(Vanilla):
             return self.pause_file in os.listdir()
         except:
             self.console(
-                f"Exception in checking pause file. {self.pause_file}", force=True)
+                f"Exception in checking pause file. {self.pause_file}", force=True
+            )
             return False
 
     def check_pause_ap(self):
@@ -1652,14 +1065,12 @@ class Strat(Vanilla):
             return self.pause_ap_file in os.listdir()
         except:
             self.console(
-                f"Exception in checking pause at profit file. {self.pause_ap_file}", force=True)
+                f"Exception in checking pause at profit file. {self.pause_ap_file}",
+                force=True,
+            )
             return False
 
     def test_leverage(self):
-        if self.ftx:
-            # TODO: FTX
-            return True
-
         if (
             self.leverage
             > self.risk_limits(psize=0, force_reload=False)["initialLeverage"]
@@ -1686,12 +1097,7 @@ class Strat(Vanilla):
 
         rls = self.risk_limits(psize, force_reload=False)
 
-        if self.leverage > rls["initialLeverage"]:  # TODO:
-            #   File "c:\jesse-projects\git\k2_base\k2_base\__init__.py", line 183, in average_down_position
-            #     self.check_limits_before_order(self.cycle_pos_qty * self.close + self.position.value, caller='average_down_position')
-            # File "c:\jesse-projects\git\strategysd\strategysd\__init__.py", line 480, in check_limits_before_order
-            #     if self.leverage > rls['initialLeverage']:
-            # TypeError: 'NoneType' object is not subscriptable
+        if self.leverage > rls["initialLeverage"]:
             print(
                 f"\n{self.ts}{self.symbol} {self.exchange} The maximum allowed leverage for your next position size ({psize:0.2f}) is {rls['initialLeverage']}x, and you have {self.leverage}x leverage set., Caller: {caller}"
             )
@@ -1705,7 +1111,8 @@ class Strat(Vanilla):
             local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json"
 
         print(
-            f'Downloading rules for {exchange}. {local_fn=}, URL: {self.trade_rule_urls[exc]}')
+            f"Downloading rules for {exchange}. {local_fn=}, URL: {self.trade_rule_urls[exc]}"
+        )
         # try:
         data = requests.get(self.trade_rule_urls[exc]).json()
 
@@ -1717,10 +1124,6 @@ class Strat(Vanilla):
         if "ret_msg" in data and data["ret_msg"] == "OK":
             data["serverTime"] = datetime.datetime.now().timestamp() * 1000
             print("Added local timestamp to Bybit data")
-
-        if "success" in data and data["success"] == "true":
-            data["serverTime"] = datetime.datetime.now().timestamp() * 1000
-            print("Added local timestamp to FTX data")
 
         if int(data["serverTime"]):
             try:
@@ -1815,177 +1218,13 @@ class Strat(Vanilla):
             rules["quantityPrecision"] = 1  # TODO
 
         rules["pricePrecision"] = rules_json["price_scale"]
-        rules["minQty"] = float(
-            rules_json["lot_size_filter"]["min_trading_qty"])
+        rules["minQty"] = float(rules_json["lot_size_filter"]["min_trading_qty"])
         rules["stepSize"] = float(rules_json["lot_size_filter"]["qty_step"])
 
         #  TODO Bybit has no notional rules. Just keep it very low to make minQty priority.
         rules["notional"] = 0.00001
 
         return rules
-
-    def ftx_rules(self):  # sourcery skip: move-assign-in-block, use-next
-        """ "
-        Parse FTX trading rules compatible with Binance Futures.
-
-        Example json data for FTX rules:
-        {
-            "name": "ETH-PERP",
-            "enabled": true,
-            "postOnly": false,
-            "priceIncrement": 0.1,
-            "sizeIncrement": 0.001,
-            "minProvideSize": 0.001,
-            "last": 1336.8,
-            "bid": 1336.7,
-            "ask": 1336.8,
-            "price": 1336.8,
-            "type": "future",
-            "futureType": "perpetual",
-            "baseCurrency": null,
-            "isEtfMarket": false,
-            "quoteCurrency": null,
-            "underlying": "ETH",
-            "restricted": false,
-            "highLeverageFeeExempt": true,
-            "largeOrderThreshold": 3000.0,
-            "change1h": 0.00928652321630804,
-            "change24h": -0.01080361107000148,
-            "changeBod": -0.019006384383943642,
-            "quoteVolume24h": 1719986677.1148,
-            "volumeUsd24h": 1719986677.1148,
-            "priceHigh24h": 1370.0,
-            "priceLow24h": 1315.7
-        },
-        """
-        rules_json = None
-
-        rules = {
-            "quantityPrecision": 1,
-            "pricePrecision": 6,
-            "minQty": 1,
-            "notional": 0.0001,
-            "stepSize": 0.1,
-        }
-
-        exc = "FTX"
-        local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json"
-
-        try:
-            with open(local_fn) as f:
-                data = json.load(f)
-        except Exception as e:
-            print(f"Error in {local_fn}")
-            print(e)
-            exit()
-
-        sym = self.symbol.replace("-USD", "-PERP")
-
-        for i in data["result"]:
-
-            if i["name"] == sym:
-                rules_json = i
-                break
-
-        if rules_json is None:
-            print(f"Error in rules_json. {local_fn}")
-            print(f"Symbol: {self.symbol}")
-            exit()
-
-        # "priceIncrement": 0.1,
-        # "sizeIncrement": 0.001,
-        # "minProvideSize": 0.001,
-        # 'ETH-PERP': {'quantityPrecision': 3, 'pricePrecision': 1, 'minQty': 0.001, 'notional': 0.0001, 'stepSize': 0.001},
-
-        rules["quantityPrecision"] = dec[str(rules_json["sizeIncrement"])]
-
-        if 'e-' in str(rules_json["priceIncrement"]):
-            places = str(rules_json["priceIncrement"]).split('-')[1]
-            print(places)
-            print(int(places)-1)
-            # float(rules_json["priceIncrement"]) # dec[str(rules_json["priceIncrement"]).replace('05', '1')]
-            rules["pricePrecision"] = int(places) - 1
-        else:
-            rules["pricePrecision"] = dec[str(
-                rules_json["priceIncrement"]).replace('05', '1')]
-
-        if self.symbol == 'DOGE-USD' or self.symbol == 'DOGE-PERP':
-            rules["pricePrecision"] = 3
-
-        self.console(
-            f"before: {str(rules_json['priceIncrement'])}, after: {str(rules_json['priceIncrement']).replace('05', '1')}")
-        rules["minQty"] = float(rules_json["minProvideSize"])
-        rules["stepSize"] = float(rules_json["sizeIncrement"])
-
-        #  TODO FTX has no notional rules. ⁉ Just keep it very low to make minQty priority.
-        rules["notional"] = 0.00001
-
-        print("rules:", rules)
-        return rules
-
-    def ftx_rules_hardcode(self):
-        """
-        BTC-PERP
-        "priceIncrement": 1,
-            "sizeIncrement": 0.0001,
-            "minProvideSize": 0.001,
-
-        ETH-PERP
-        "priceIncrement": 0.1,
-            "sizeIncrement": 0.001,
-            "minProvideSize": 0.001,
-
-        SOL-PERP
-        "priceIncrement": 0.0025,
-            "sizeIncrement": 0.01,
-            "minProvideSize": 0.01,
-
-        XMP-PERP
-        "priceIncrement": 0.01,
-            "sizeIncrement": 0.01,
-            "minProvideSize": 0.01,
-        """
-
-        def_rules = {
-            "quantityPrecision": 1,
-            "pricePrecision": 6,
-            "minQty": 1,
-            "notional": 0.0001,
-            "stepSize": 0.1,
-        }
-
-        rules = {
-            "BTC-PERP": {
-                "quantityPrecision": 4,
-                "pricePrecision": 0,
-                "minQty": 0.001,
-                "notional": 0.0001,
-                "stepSize": 0.0001,
-            },
-            "ETH-PERP": {
-                "quantityPrecision": 3,
-                "pricePrecision": 1,
-                "minQty": 0.001,
-                "notional": 0.0001,
-                "stepSize": 0.001,
-            },
-            "XMR-PERP": {
-                "quantityPrecision": 2,
-                "pricePrecision": 2,
-                "minQty": 0.01,
-                "notional": 0.0001,
-                "stepSize": 0.01,
-            },
-            "SOL-PERP": {
-                "quantityPrecision": 2,
-                "pricePrecision": 3,
-                "minQty": 0.01,
-                "notional": 0.0001,
-                "stepSize": 0.01,
-            },
-        }
-
-        return rules[self.symbol]
 
     # Utility functions
 
@@ -2011,8 +1250,9 @@ class Strat(Vanilla):
 
     def ts_to_str(self, ts):
         if ts:
-            return datetime.datetime.utcfromtimestamp(ts / 1000).strftime("%Y-%m-%d %H:%M:%S")
-        
+            return datetime.datetime.utcfromtimestamp(ts / 1000).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
 
     @property
     def ts(self):
@@ -2057,13 +1297,17 @@ class Strat(Vanilla):
                 print(f"{self.ts} {self.symbol} {msg}")
 
     def log_metrics_after_closing(self, metrics):
-        self.console(f"📈 Initial/Current Balance: {self.initial_balance:0.2f}/{self.balance:0.2f}, current udd: {self.udd:0.2f}, udd stop: {self.udd_stop}, Max udd: {self.dd['min_pnl_ratio']:0.2f}, Max. DD: {metrics['max_drawdown']:0.2f}, Total Fee: {metrics['fee']:0.3f}, Largest Win: {metrics['largest_winning_trade']:0.2f}, Sharpe: {metrics['sharpe_ratio']:0.2f}, Calmar: {metrics['calmar_ratio']:0.2f}")
+        self.console(
+            f"📈 Initial/Current Balance: {self.initial_balance:0.2f}/{self.balance:0.2f}, current udd: {self.udd:0.2f}, udd stop: {self.udd_stop}, Max udd: {self.dd['min_pnl_ratio']:0.2f}, Max. DD: {metrics['max_drawdown']:0.2f}, Total Fee: {metrics['fee']:0.3f}, Largest Win: {metrics['largest_winning_trade']:0.2f}, Sharpe: {metrics['sharpe_ratio']:0.2f}, Calmar: {metrics['calmar_ratio']:0.2f}"
+        )
 
     def log_increasing_position_msg(self, qty):
-        self.console(f"🔼 Increasing position with {self.cycle_pos_size:0.2f} {self.quote_currency}, Qty: {qty} {self.base_currency} "
+        self.console(
+            f"🔼 Increasing position with {self.cycle_pos_size:0.2f} {self.quote_currency}, Qty: {qty} {self.base_currency} "
             f"Current Pnl {round(self.position.pnl_percentage / self.leverage, 2)}%, "
             f"current udd: {self.udd:0.2f}, udd stop: {self.udd_stop}, Max udd: {self.dd['min_pnl_ratio']:0.2f}, "
-            f"{self.liq_metrics}, cycle_pos: {self.current_cycle_positions}, dev_limit: {self.deviation_limit}, AvgEntry: {self.avgEntryPrice:0.5f}")
+            f"{self.liq_metrics}, cycle_pos: {self.current_cycle_positions}, dev_limit: {self.deviation_limit}, AvgEntry: {self.avgEntryPrice:0.5f}"
+        )
 
     def log_balance_to_dc(self):
         strategy_name = self.__class__.__name__
@@ -2077,8 +1321,7 @@ class Strat(Vanilla):
 
         if is_live():
             if not hook_url:
-                print(
-                    f"\n{self.ts} {self.symbol} Check custom hook url in .env file!")
+                print(f"\n{self.ts} {self.symbol} Check custom hook url in .env file!")
                 return
 
             try:
@@ -2093,55 +1336,6 @@ class Strat(Vanilla):
         elif self.log_enabled:
             print(f"{self.ts} {self.symbol} {data}")
 
-    def ftx_watchlist(self) -> list:
-        try:
-            wl = [
-                ("Updated at", self.ts),
-                ("Symbol", self.symbol),
-                ("self.price", self.price),
-                ("Mark Price", self.ftx_risk_limits["mark"]),
-                ("Cycle Pos. Size", round(self.cycle_pos_size, 3)),
-                ("Liquidation Price", f"{self.LP1:0.2f}" if self.LP1 is not float(
-                    "nan") else "N/A"),
-                ("Margin Fraction",
-                 f"{self.margin_fraction * 100:0.2f}%" if self.margin_fraction and self.margin_fraction is not float("nan") else "N/A"),
-                ("Maintenance Margin Fraction",
-                 f"{self.maintenance_margin_fraction * 100:0.2f}%" if self.maintenance_margin_fraction and self.maintenance_margin_fraction is not float("nan") else "N/A"),
-                ("Liquidation Distance", f"{self.liquidation_distance:0.2f}%" if self.liquidation_distance and self.liquidation_distance is not float(
-                    "nan") else "N/A"),
-                ("Inv. Liquidation Distance", f"{self.ld_inverse:0.2f}%" if self.ld_inverse and self.ld_inverse is not float(
-                    "nan") else "N/A"),
-                ("Base IMF", f"{self.base_imf:0.3f}"),
-                ("Position IMF", f"{self.position_imf:0.3f}" if self.position_imf and self.position_imf is not float(
-                    "nan") else "N/A"),
-                ("Position MMF", f"{self.position_mmf:0.3f}" if self.position_mmf and self.position_mmf is not float(
-                    "nan") else "N/A"),
-                ("Collateral Used", f"{self.collateral_used:0.2f}"),
-                ("Total Position Notional",
-                 f"{self.total_position_notional:0.2f}"),
-                ("Account MMF", f"{self.account_mmf:0.3f}" if self.account_mmf and self.account_mmf is not float(
-                    "nan") else "N/A"),
-                ("ACMF", f"{self.acmf:0.3f}" if self.acmf and self.acmf is not float(
-                    "nan") else "N/A"),
-                ("Zero Price", f"{self.zero_price:0.2f}" if self.zero_price and self.zero_price is not float(
-                    "nan") else "N/A"),
-                ("Position Zero Price", f"{self.pzp:0.2f}" if self.pzp and self.pzp is not float(
-                    "nan") else "N/A"),
-                ("Maintenance Collateral", f"{self.maintenance_collateral:0.2f}" if self.maintenance_collateral and self.maintenance_collateral is not float(
-                    "nan") else "N/A"),
-                ("LP Rate", f"{self.lp_rate():0.3f}" if self.lp_rate(
-                ) and self.lp_rate() is not float("nan") else "N/A")
-            ]
-        except Exception as e:
-            return [
-                ("Updated at", self.ts),
-                ("Symbol", self.symbol),
-                ("Status", "Watchlist error!"),
-                ("Error", e)
-            ]
-
-        return wl
-
     def watch_list(self) -> list:
         wl = [("Status", "Not ready.")]
 
@@ -2149,9 +1343,6 @@ class Strat(Vanilla):
             return wl
 
         self.update_shared_vars("Watchlist")
-
-        if self.ftx:
-            return self.ftx_watchlist()
 
         try:
             # self.update_shared_vars('Watchlist')  # Moved method body.
@@ -2226,8 +1417,7 @@ class Strat(Vanilla):
                     and self.shared_vars["max_margin_ratio_ts"] is not float("nan")
                     else "N/A",
                 ),
-                (f"{self.symbol} Max Total Value:",
-                 f"{self.max_position_value:0.2f}"),
+                (f"{self.symbol} Max Total Value:", f"{self.max_position_value:0.2f}"),
                 (
                     "Shared Max. Total Value",
                     f"{self.shared_vars['max_total_value']:0.2f}",
@@ -2252,7 +1442,7 @@ class Strat(Vanilla):
                 ("Updated at", self.ts),
                 ("Symbol", self.symbol),
                 ("Status", "Watchlist error!"),
-                ("Error", e)
+                ("Error", e),
             ]
 
         # print(wl)
@@ -2260,12 +1450,6 @@ class Strat(Vanilla):
 
     def terminate(self):
         print(f"Standalone Strategy Template v. {version('strat')}")
-
-        try:
-            # self.console(f'Max. PZP: {self.max_zp}')
-            print(self.ftx_metrics)
-        except Exception:
-            pass
 
         try:
             self.test_max_pos_size_vs_leverage()
@@ -2287,16 +1471,14 @@ class Strat(Vanilla):
             print(
                 f"\n{'Max. Margin Ratio':<24}| {self.shared_vars['max_margin_ratio']}%"
             )
-            print(
-                f"{'Minimum Margin':<24}| {round(self.shared_vars['min_margin'])}")
+            print(f"{'Minimum Margin':<24}| {round(self.shared_vars['min_margin'])}")
             print(
                 f"{'Annual/MR':<24}| {self.metrics['annual_return'] / (self.shared_vars['max_margin_ratio'] * 2):0.2f}"
             )
             print(
                 f"{'Shared Max. Total Value':<24}| {self.shared_vars['max_total_value']:0.2f}"
             )
-            print(
-                f"{'Max. LP Ratio':<24}| {self.shared_vars['max_lp_ratio']:0.02f}")
+            print(f"{'Max. LP Ratio':<24}| {self.shared_vars['max_lp_ratio']:0.02f}")
             # print(f"{'Insuff. Margin Count':<24}| {self.insuff_margin_count}")
             # print(f"{'Insuff. Margin Count':<24}| {self.max_insuff_margin_count}")
             print(
@@ -2306,11 +1488,11 @@ class Strat(Vanilla):
 
         except Exception as e:
             print(f"{self.symbol} {e}")
-        
+
         try:
             if metrics := self.metrics:
-                net_profit_percentage = metrics['net_profit_percentage']
-                profit_per_udd = net_profit_percentage / abs(self.dd['min_pnl_ratio'])
+                net_profit_percentage = metrics["net_profit_percentage"]
+                profit_per_udd = net_profit_percentage / abs(self.dd["min_pnl_ratio"])
                 print(f"{'ppudd Ratio':<24}| {profit_per_udd:0.2f}")
         except Exception as e:
             pass
@@ -2327,17 +1509,16 @@ class Strat(Vanilla):
 
         try:
             print(f"{'udd stop Count':<24}| {self.udd_stop_count}")
-            print('udd stop Events: ', self.udd_stop_events)
+            print("udd stop Events: ", self.udd_stop_events)
         except Exception as e:
             pass
 
         if not self.is_trading and self.kill_sw_file in os.listdir():
-            print(f'Removing {self.kill_sw_file=} file.')
+            print(f"Removing {self.kill_sw_file=} file.")
             try:
                 os.remove(self.kill_sw_file)
             except Exception as e:
-                print(f'Could not remove {self.kill_sw_file}\n {e}')
-
+                print(f"Could not remove {self.kill_sw_file}\n {e}")
 
         if "--light-reports" in sys.argv:
             print("\nCreating light reports...")

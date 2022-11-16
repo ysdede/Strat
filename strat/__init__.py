@@ -241,6 +241,13 @@ class Strat(Vanilla):
         self.first_run = False
 
     @property
+    def liq_metrics(self):
+        return f"LPR: {self.lp_rate():0.2f}, Liq. Price: {self.LP1:0.2f}"
+
+    def restore_session(self):
+        self.resume = False
+
+    @property
     def quote_currency(self):
         return self.symbol.split("-")[1]
 

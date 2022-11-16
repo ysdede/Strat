@@ -120,7 +120,6 @@ class Strat(Vanilla):
 
         try:
             from dotenv import load_dotenv
-
             load_dotenv()
         except Exception:
             pass
@@ -157,12 +156,6 @@ class Strat(Vanilla):
             self.console(e)
         # Quick fix for Crude Oil rules. Use BTC rules for BCO.
         self._symbol = self.symbol.replace("BCO-", "BTC-")
-
-        # if self.symbol.endswith("-USD"):
-        #     self._symbol = self.symbol.replace("-USD", "-USDT")
-
-        # if self.symbol.endswith("-PERP"):
-        #     self._symbol = self.symbol.replace("-PERP", "-USDT")
 
         if self.symbol.endswith("-USD"):
             self._symbol = self.symbol.replace("-USD", "-PERP")
@@ -263,7 +256,6 @@ class Strat(Vanilla):
     def udd(self):
         if self.position.pnl < 0:
             return self.position.pnl * 100 / self.balance
-
         return 0
 
     def save_min_pnl(self):
@@ -1227,6 +1219,78 @@ class Strat(Vanilla):
         return rules
 
     # Utility functions
+
+    @property
+    def current_state(self):
+        return {
+            "cycle_pos_size": self.cycle_pos_size,
+            "max_position_value": self.max_position_value,
+            "max_open_positions": self.max_open_positions,
+            "max_insuff_margin_count": self.max_insuff_margin_count,
+            "current_cycle_positions": self.current_cycle_positions,
+            "max_cycle_entry_recorded": self.max_cycle_entry_recorded,
+            "total_positions": self.total_positions,
+            "insuff_margin_count": self.insuff_margin_count,
+            "unique_insuff_margin_count": self.unique_insuff_margin_count,
+            "last_trade_ts": self.last_trade_ts,
+            "is_open": self.is_open,
+            "dd": self.dd
+            # 'shared_vars': self.shared_vars,  # Do we really need it?
+        }
+
+    def restore_state_vars(self, state):
+        self.cycle_pos_size = state["cycle_pos_size"]
+        self.max_position_value = state["max_position_value"]
+        self.max_open_positions = state["max_open_positions"]
+        self.max_insuff_margin_count = state["max_insuff_margin_count"]
+        self.current_cycle_positions = state["current_cycle_positions"]
+        self.max_cycle_entry_recorded = state["max_cycle_entry_recorded"]
+        self.total_positions = state["total_positions"]
+        self.insuff_margin_count = state["insuff_margin_count"]
+        self.unique_insuff_margin_count = state["unique_insuff_margin_count"]
+        self.last_trade_ts = state["last_trade_ts"]
+
+        # Reset dd metrics if it's not included in pickle save, it's just for this case.
+        # We'll have it next runs.
+        # It must reset values and recalculate at next candle.
+        try:
+            self.dd = state["dd"]
+        except Exception as e:
+            self.console("dd metrics not found, resetting to defaults.")
+            self.dd = {
+                "min_pnl_ratio": 0,
+                "pnl": 0,
+                "pnl_perc": 0,
+                "lpr": 0,
+                "mr_ratio": 0,
+                "balance": self.balance,
+                "ts": 0,
+            }
+        self.console(f"📀 {self.cycle_pos_size=}")
+        # self.shared_vars = state['shared_vars']
+
+    def clear_string(self, string):
+        return string.replace(" ", "_").replace("\n", "")
+
+    @property
+    def session_file_name(self):
+        strategy_name = self.__class__.__name__
+        # last_trade = self.trades[-1]
+        return self.clear_string(
+            f"{self.exchange}-{self.symbol}-{strategy_name}-{self.leverage}-{self.timeframe}-{self.app_port}.pickle"
+        )
+
+    def binance_ob_ticker(self):
+        order_book_url = f"https://fapi.binance.com/fapi/v1/ticker/bookTicker?symbol={self.symbol.replace('-', '')}"
+
+        # start = time.time()
+
+        try:
+            data = requests.get(order_book_url).json()
+            return data
+        except Exception as e:
+            print(e)
+            return ""
 
     @property
     def cap(self):

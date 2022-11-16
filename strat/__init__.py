@@ -1574,15 +1574,15 @@ class Strat(Vanilla):
         #     print(e)
 
         try:
-            print(self.dd)
-        except Exception as e:
-            print(e)
-
-        try:
             print(f"{'udd stop Count':<24}| {self.udd_stop_count}")
             print("udd stop Events: ", self.udd_stop_events)
         except Exception as e:
             pass
+        
+        # try:
+        #     print(self.dd)
+        # except Exception as e:
+        #     print(e)
 
         if not self.is_trading and self.kill_sw_file in os.listdir():
             print(f"Removing {self.kill_sw_file=} file.")

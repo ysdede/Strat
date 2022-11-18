@@ -103,6 +103,7 @@ class Strat(Vanilla):
         self.resume = False
         self.udd_stop_count = 0
         self.udd_stop_events = []
+        self.udd_stop_losses = 0
 
         # Settings:
         self.udd_stop_enabled = False  # Disabled by default, if this setting is missing in any strategy it will not perform udd stop.
@@ -1369,7 +1370,7 @@ class Strat(Vanilla):
 
     def log_metrics_after_closing(self, metrics):
         self.console(
-            f"📈 Initial/Current Balance: {self.initial_balance:0.2f}/{self.balance:0.2f}, current udd: {self.udd:0.2f}, udd stop: {self.udd_stop}, Max udd: {self.dd['min_pnl_ratio']:0.2f}, Max. DD: {metrics['max_drawdown']:0.2f}, Total Fee: {metrics['fee']:0.3f}, Largest Win: {metrics['largest_winning_trade']:0.2f}, Sharpe: {metrics['sharpe_ratio']:0.2f}, Calmar: {metrics['calmar_ratio']:0.2f}"
+            f"📈 Initial/Current Balance: {self.initial_balance:0.2f}/{self.balance:0.2f}, current udd: {self.udd:0.2f}, udd stop: {self.udd_stop}, Max udd: {self.dd['min_pnl_ratio']:0.2f}, Max. DD: {metrics['max_drawdown']:0.2f}, Total Fee: {metrics['fee']:0.3f}, Largest Win: {metrics['largest_winning_trade']:0.2f}, Sharpe: {metrics['sharpe_ratio']:0.2f}, Calmar: {metrics['calmar_ratio']:0.2f} Max. Lpr: {self.shared_vars['max_lp_ratio']:0.02f} at {self.shared_vars['max_lp_ratio_ts']} udd count: {self.udd_stop_count}, Sum of udd stop losses: {self.udd_stop_losses:0.1f}"
         )
 
     def log_increasing_position_msg(self, qty):
@@ -1558,7 +1559,7 @@ class Strat(Vanilla):
             print(f"{'uDD Ratio':<24}| {self.dd['min_pnl_ratio']:0.2f}")
 
         except Exception as e:
-            print(f"{self.symbol} {e}")
+            print(f"{self.symbol} Error printing extra metrics! {e}")
 
         try:
             if metrics := self.metrics:

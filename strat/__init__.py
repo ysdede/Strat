@@ -53,7 +53,7 @@ class Strat(Vanilla):
         self.trade_rule_urls = {
             "Binance": "https://api.binance.com/api/v1/exchangeInfo",
             "Binance Futures": "https://fapi.binance.com/fapi/v1/exchangeInfo",
-            "Bybit Perpetual": "https://api.bybit.com/v2/public/symbols",
+            "Bybit USDT Perpetual": "https://api.bybit.com/v2/public/symbols",
         }
 
         # Trading rules variables
@@ -162,7 +162,7 @@ class Strat(Vanilla):
             self._symbol = self.symbol.replace("-USD", "-PERP")
 
         # If exchange rule files are not present or we're trading live, download them
-        exc = "Bybit Perpetual" if self.trade_with_bybit_rules else self.exchange
+        exc = "Bybit USDT Perpetual" if self.trade_with_bybit_rules else self.exchange
 
         local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json".replace(
             "BinanceExch", "BinanceFuturesExch"
@@ -174,7 +174,9 @@ class Strat(Vanilla):
             or self.trade_with_bybit_rules
         ):
             if not os.path.exists(local_fn) or is_live():
-                self.download_rules(exchange="Bybit Perpetual")
+                self.download_rules(exchange="Bybit USDT Perpetual")
+            else:
+                print(f'Loading {self.exchange} rules from cached file: {local_fn}')
             rules = self.bybit_rules()
         else:
             # Fall back to Binance Perp rules if exchange != bybit
@@ -1105,7 +1107,7 @@ class Strat(Vanilla):
     def download_rules(self, exchange: str, local_fn: str = None):
         """Download the trading rules from the exchanges."""
 
-        exc = "Bybit Perpetual" if self.trade_with_bybit_rules else exchange
+        exc = "Bybit USDT Perpetual" if self.trade_with_bybit_rules else exchange
 
         if not local_fn:
             local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json"
@@ -1386,6 +1388,7 @@ class Strat(Vanilla):
         last_trade = self.trades[-1]
         bot_name = f"{self.app_port} {strategy_name} {self.symbol} {self.exchange} {self.leverage}x"
         msg = f"Balance: {self.initial_balance:0.2f} -> {self.balance:0.2f}, Profit: {last_trade.pnl:0.2f}"
+        # msg = f"Balance: {self.initial_balance:0.2f} -> {self.balance:0.2f}, Profit: {self.balance - self.initial_balance:0.2f}"
         self.to_discord(self.wallets_dc_hook, bot_name, msg)
 
     def to_discord(self, hook_url=None, username="None", msg="None"):

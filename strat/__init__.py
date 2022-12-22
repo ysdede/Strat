@@ -1258,7 +1258,7 @@ class Strat(Vanilla):
         self.total_positions = state["total_positions"]
         self.insuff_margin_count = state["insuff_margin_count"]
         self.unique_insuff_margin_count = state["unique_insuff_margin_count"]
-        self.last_trade_ts = state["last_trade_ts"]
+        # self.last_trade_ts = state["last_trade_ts"]
 
         # Reset dd metrics if it's not included in pickle save, it's just for this case.
         # We'll have it next runs.

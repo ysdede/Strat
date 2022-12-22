@@ -360,6 +360,15 @@ class Strat(Vanilla):
             self.drawdown_simulated, self.shared_vars["max_dd_sim"]
         )
 
+    @property
+    def price_(self):
+        """Return self.close if we backtest, self.price at live"""
+        if self.is_trading:
+            return self.price
+        else:
+            return self.close
+
+
     def min_order_size(self):
         """Calculates the minimum order size for the current symbol/exchange rule.
         Returns:
@@ -369,38 +378,38 @@ class Strat(Vanilla):
         cycle_pos_size = 0
         # If USD value of minQTY is greater than minimum notional, use minQTY.
         # Convert minQTY to dollar size and add potential fees before converting back to qty.
-        if self.minQty * self.close >= self.notional:
+        if self.minQty * self.price_ >= self.notional:
             self.console(
-                f"minQty * close > notional: {self.minQty * self.close} > {self.notional}",
+                f"minQty * price_ > notional: {self.minQty * self.price_} > {self.notional}",
                 False,
             )
             qty = self.minQty
-            cycle_pos_size = qty * self.close
+            cycle_pos_size = qty * self.price_
             fees = cycle_pos_size * self.fee_rate * 6
             cycle_pos_size += fees
             cycle_pos_size *= 1.05
             qty = utils.size_to_qty(
                 cycle_pos_size,
-                self.close,
+                self.price_,
                 precision=self.quantityPrecision,
                 fee_rate=self.fee_rate,
             )
             self.console(
-                f"⚖ Calculate minimum by Qty {self.close=}, {qty=}, Cycle Pos. Size: {cycle_pos_size:0.2f}, {self.notional=}, {self.minQty=}, {self.stepSize=}, Fees: {fees:0.3f}",
+                f"⚖ Calculate minimum by Qty {self.price_=}, {qty=}, Cycle Pos. Size: {cycle_pos_size:0.2f}, {self.notional=}, {self.minQty=}, {self.stepSize=}, Fees: {fees:0.3f}",
                 False,
             )
             return qty, cycle_pos_size
 
         qty = utils.size_to_qty(
             self.notional,
-            self.close,
+            self.price_,
             precision=self.quantityPrecision,
             fee_rate=self.fee_rate,
         )
 
         while True:  # TODO: Remove infinite loop!
             qty += self.stepSize
-            cycle_pos_size = qty * self.close
+            cycle_pos_size = qty * self.price_
             cycle_pos_size += cycle_pos_size * (self.fee_rate * 3)
 
             if cycle_pos_size > self.notional:
@@ -410,13 +419,13 @@ class Strat(Vanilla):
 
                 qty = utils.size_to_qty(
                     cycle_pos_size,
-                    self.close,
+                    self.price_,
                     precision=self.quantityPrecision,
                     fee_rate=self.fee_rate,
                 )
 
                 self.console(
-                    f"Calculate minimum by Nominal {self.close=}, {qty=}, Cycle Pos. Size: {cycle_pos_size:0.2f}, {self.notional=}, {self.minQty=}, {self.stepSize=}, Fees: {fees:0.3f}",
+                    f"Calculate minimum by Nominal {self.price_=}, {qty=}, Cycle Pos. Size: {cycle_pos_size:0.2f}, {self.notional=}, {self.minQty=}, {self.stepSize=}, Fees: {fees:0.3f}",
                     False,
                 )
                 return qty, cycle_pos_size
@@ -599,14 +608,14 @@ class Strat(Vanilla):
 
         lp = self.LP1
 
-        rate = lp / self.close if self.is_long else self.close / lp
+        rate = lp / self.price_ if self.is_long else self.price_ / lp
         self.save_max_lp_ratio(rate)
         return rate
 
     def print_lp(self):
         if self.LP1 > 0:
-            rate = self.LP1 / self.close if self.is_long else self.close / self.LP1
-            msg = f"\n{self.ts} {self.symbol} LP1: {self.LP1:0.2f}, Price: {self.close:0.2f}, Rate: {rate:0.2f} Balance: {self.cap:0.2f}, AvgEntry: {self.avgEntryPrice:0.2f}, Pos Size: {self.position.value:0.2f}, Pos Qty: {self.position.qty:0.2f}, Pnl%: {self.position.pnl_percentage / self.leverage:0.2f}%, AvailMargin: {self.available_margin:0.2f}, Actual Margin Ratio: {self.margin_ratio('update position')}"
+            rate = self.LP1 / self.price_ if self.is_long else self.price_ / self.LP1
+            msg = f"\n{self.ts} {self.symbol} LP1: {self.LP1:0.2f}, Price: {self.price_:0.2f}, Rate: {rate:0.2f} Balance: {self.cap:0.2f}, AvgEntry: {self.avgEntryPrice:0.2f}, Pos Size: {self.position.value:0.2f}, Pos Qty: {self.position.qty:0.2f}, Pnl%: {self.position.pnl_percentage / self.leverage:0.2f}%, AvailMargin: {self.available_margin:0.2f}, Actual Margin Ratio: {self.margin_ratio('update position')}"
             print(f"\033[33m{msg}\033[0m")
 
     #
@@ -774,7 +783,7 @@ class Strat(Vanilla):
 
         if self.shared_vars["max_lp_ratio"] != max_lp_snapshot:
             self.shared_vars["max_lp_ratio_ts"] = self.ts
-            msg = f"LP Ratio {max_lp_snapshot:0.2f} -> {self.shared_vars['max_lp_ratio']:0.2f}, Price: {self.close}, Liq. Price: {self.LP1:0.2f}, Caller: {caller}"
+            msg = f"LP Ratio {max_lp_snapshot:0.2f} -> {self.shared_vars['max_lp_ratio']:0.2f}, Price: {self.price_}, Liq. Price: {self.LP1:0.2f}, Caller: {caller}"
             # self.console(msg, False)
             # self.console(msg)
 

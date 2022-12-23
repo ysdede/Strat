@@ -264,9 +264,7 @@ class Strat(Vanilla):
 
     @property
     def udd(self):
-        if self.position.pnl < 0:
-            return self.position.pnl * 100 / self.balance
-        return 0
+        return self.position.pnl * 100 / self.balance if self.position.pnl < 0 else 0
 
     def save_min_pnl(self):
         if self.position.pnl < 0:
@@ -363,10 +361,7 @@ class Strat(Vanilla):
     @property
     def price_(self):
         """Return self.close if we backtest, self.price at live"""
-        if self.is_trading:
-            return self.price
-        else:
-            return self.close
+        return self.price if self.is_trading else self.close
 
 
     def min_order_size(self):
@@ -577,21 +572,21 @@ class Strat(Vanilla):
     @property
     def LP1(self):
         """LP1 Liquidation Price"""
-        if not self.is_open:
-            return float("nan")
-        # TODO: We may have open positions and liq price when trading multi routes.
-        #       is_open check commented out for now.
-        # if not self.is_open:
-        #     return float('inf')
-        # LP1 = (self.WB - self.TMM1 + self.UPNL1 + self.cumB + self.cumL + self.cumS - self.Side1BOTH * self.Position1BOTH * self.EP1BOTH - self.Position1LONG * self.EP1LONG + self.Position1SHORT * self.EP1SHORT) / (self.Position1BOTH * self.MMRB + self.Position1LONG * self.MMRL + self.Position1SHORT * self.MMRS - self.Side1BOTH * self.Position1BOTH - self.Position1LONG + self.Position1SHORT)
-        LP1_simple = (
-            self.WB
-            - self.TMM1
-            + self.UPNL1
-            + self.cumB
-            - self.Side1BOTH * self.Position1BOTH * self.EP1BOTH
-        ) / (self.Position1BOTH * self.MMRB - self.Side1BOTH * self.Position1BOTH)
-        return LP1_simple
+        return (
+            (
+                self.WB
+                - self.TMM1
+                + self.UPNL1
+                + self.cumB
+                - self.Side1BOTH * self.Position1BOTH * self.EP1BOTH
+            )
+            / (
+                self.Position1BOTH * self.MMRB
+                - self.Side1BOTH * self.Position1BOTH
+            )
+            if self.is_open
+            else float("nan")
+        )
 
     # TODO: @property
     def liq_price(self) -> float:
@@ -805,14 +800,10 @@ class Strat(Vanilla):
             if is_live():
                 self.console(msg)
                 self.terminate()
-            else:
-                # print(msg)
-
-                # Disabled for going live, any potential bug with this can cause a loss of funds
-                if not self.keep_running_in_case_of_liquidation:
-                    # exit()
-                    self.terminate()
-                    raise Exception(msg)
+            elif not self.keep_running_in_case_of_liquidation:
+                # exit()
+                self.terminate()
+                raise Exception(msg)
 
     def load_bybit_risk_limits(self):
         from pathlib import Path
@@ -1305,8 +1296,7 @@ class Strat(Vanilla):
         # start = time.time()
 
         try:
-            data = requests.get(order_book_url).json()
-            return data
+            return requests.get(order_book_url).json()
         except Exception as e:
             print(e)
             return ""

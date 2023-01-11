@@ -105,6 +105,16 @@ class Strat(Vanilla):
         self.udd_stop_events = []
         self.udd_stop_losses = 0
         self.min_pnl_at_stoploss = 0
+        self.dd = {
+                "min_pnl_ratio": 0,
+                "pnl": 0,
+                "pnl_perc": 0,
+                "lpr": 0,
+                "mr_ratio": 0,
+                "balance": 0,
+                "ts": 0,
+            }
+        
 
         # Settings:
         self.udd_stop_enabled = False  # Disabled by default, if this setting is missing in any strategy it will not perform udd stop.
@@ -261,18 +271,20 @@ class Strat(Vanilla):
 
     @property
     def wallet_equivalent(self):
-        return self.balance + self.position.pnl  # if self.is_open else selfbalance
+        if self.is_open:
+            return self.balance + self.position.pnl  # if self.is_open else selfbalance
+        return self.balance
 
     @property
     def udd(self):
         if self.position.pnl < 0:
-            return self.position.pnl * 100 / self.balance
+            return self.position.pnl * 100 / self.wallet_equivalent  # self.balance
         return 0
 
     def save_min_pnl(self):
-        if self.position.pnl < 0:
-            # Leveraged margin  # does capital include current PNL?
-            pnl_vs_capital = self.position.pnl * 100 / self.balance
+        if True:  # self.position.pnl < 0:
+            # Leveraged margin  # does capital include current PNL?, No.
+            pnl_vs_capital = self.udd  # self.position.pnl * 100 / self.balance
 
             if pnl_vs_capital < self.dd["min_pnl_ratio"]:
                 self.dd["min_pnl_ratio"] = pnl_vs_capital
@@ -1569,7 +1581,7 @@ class Strat(Vanilla):
             print(
                 f"{'Trades have Insuff. Margin Count':<24}| {self.unique_insuff_margin_count}"
             )
-            print(f"{'uDD Ratio':<24}| {self.dd['min_pnl_ratio']:0.2f}")
+            print(f"{'uDD Ratio':<24}| {self.dd['min_pnl_ratio']:0.3f}")
 
         except Exception as e:
             print(f"{self.symbol} Error printing extra metrics! {e}")

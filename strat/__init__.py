@@ -104,6 +104,7 @@ class Strat(Vanilla):
         self.udd_stop_count = 0
         self.udd_stop_events = []
         self.udd_stop_losses = 0
+        self.min_pnl_at_stoploss = 0
 
         # Settings:
         self.udd_stop_enabled = False  # Disabled by default, if this setting is missing in any strategy it will not perform udd stop.
@@ -1592,6 +1593,11 @@ class Strat(Vanilla):
         except Exception as e:
             pass
         
+        try:
+            print(f"{'Min. PNL at stoploss':<24}| {self.min_pnl_at_stoploss:0.2f}")
+        except Exception as e:
+            pass
+
         # try:
         #     print(self.dd)
         # except Exception as e:

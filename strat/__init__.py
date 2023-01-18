@@ -1351,13 +1351,27 @@ class Strat(Vanilla):
             )
 
     @property
+    def now(self):
+        """
+        Current estimated time for backtesting.
+        We have latest closed candles timestamp and we are at lastest ts + n time,
+        We need to add some time to latest candle's ts.
+        (timeframe at this case)
+        """
+        timeframe = 300000
+        try:
+            timeframe = self.candles[-1][0] - self.candles[-2][0]
+        except:
+            pass
+
+        return self.current_candle[0] + timeframe
+
+    @property
     def ts(self):
         if is_live():
             return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         else:
-            return datetime.datetime.utcfromtimestamp(
-                self.current_candle[0] / 1000
-            ).strftime("%Y-%m-%d %H:%M:%S")
+            return datetime.datetime.utcfromtimestamp(self.now/ 1000).strftime("%Y-%m-%d %H:%M:%S")
 
     def console(self, msg, send_notification=True, force=False):
         if self.log_enabled or force:

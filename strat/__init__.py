@@ -104,6 +104,17 @@ class Strat(Vanilla):
         self.udd_stop_count = 0
         self.udd_stop_events = []
         self.udd_stop_losses = 0
+        self.min_pnl_at_stoploss = 0
+        self.dd = {
+                "min_pnl_ratio": 0,
+                "pnl": 0,
+                "pnl_perc": 0,
+                "lpr": 0,
+                "mr_ratio": 0,
+                "balance": 0,
+                "ts": 0,
+            }
+        
 
         # Settings:
         self.udd_stop_enabled = False  # Disabled by default, if this setting is missing in any strategy it will not perform udd stop.
@@ -260,18 +271,20 @@ class Strat(Vanilla):
 
     @property
     def wallet_equivalent(self):
-        return self.balance + self.position.pnl  # if self.is_open else selfbalance
+        if self.is_open:
+            return self.balance + self.position.pnl  # if self.is_open else selfbalance
+        return self.balance
 
     @property
     def udd(self):
         if self.position.pnl < 0:
-            return self.position.pnl * 100 / self.balance
+            return self.position.pnl * 100 / self.wallet_equivalent  # self.balance
         return 0
 
     def save_min_pnl(self):
-        if self.position.pnl < 0:
-            # Leveraged margin  # does capital include current PNL?
-            pnl_vs_capital = self.position.pnl * 100 / self.balance
+        if True:  # self.position.pnl < 0:
+            # Leveraged margin  # does capital include current PNL?, No.
+            pnl_vs_capital = self.udd  # self.position.pnl * 100 / self.balance
 
             if pnl_vs_capital < self.dd["min_pnl_ratio"]:
                 self.dd["min_pnl_ratio"] = pnl_vs_capital
@@ -1338,13 +1351,27 @@ class Strat(Vanilla):
             )
 
     @property
+    def now(self):
+        """
+        Current estimated time for backtesting.
+        We have latest closed candles timestamp and we are at lastest ts + n time,
+        We need to add some time to latest candle's ts.
+        (timeframe at this case)
+        """
+        timeframe = 300000
+        try:
+            timeframe = self.candles[-1][0] - self.candles[-2][0]
+        except:
+            pass
+
+        return self.current_candle[0] + timeframe
+
+    @property
     def ts(self):
         if is_live():
             return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         else:
-            return datetime.datetime.utcfromtimestamp(
-                self.current_candle[0] / 1000
-            ).strftime("%Y-%m-%d %H:%M:%S")
+            return datetime.datetime.utcfromtimestamp(self.now/ 1000).strftime("%Y-%m-%d %H:%M:%S")
 
     def console(self, msg, send_notification=True, force=False):
         if self.log_enabled or force:
@@ -1568,7 +1595,7 @@ class Strat(Vanilla):
             print(
                 f"{'Trades have Insuff. Margin Count':<24}| {self.unique_insuff_margin_count}"
             )
-            print(f"{'uDD Ratio':<24}| {self.dd['min_pnl_ratio']:0.2f}")
+            print(f"{'uDD Ratio':<24}| {self.dd['min_pnl_ratio']:0.3f}")
 
         except Exception as e:
             print(f"{self.symbol} Error printing extra metrics! {e}")
@@ -1592,6 +1619,11 @@ class Strat(Vanilla):
         except Exception as e:
             pass
         
+        try:
+            print(f"{'Min. PNL at stoploss':<24}| {self.min_pnl_at_stoploss:0.2f}")
+        except Exception as e:
+            pass
+
         # try:
         #     print(self.dd)
         # except Exception as e:

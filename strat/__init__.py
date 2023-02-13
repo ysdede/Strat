@@ -175,9 +175,11 @@ class Strat(Vanilla):
         # If exchange rule files are not present or we're trading live, download them
         exc = "Bybit USDT Perpetual" if self.trade_with_bybit_rules else self.exchange
 
-        local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json".replace(
-            "BinanceExch", "BinanceFuturesExch"
-        )
+        # BinanceFuturesExchangeInfo.json
+        # BinancePerpetualFuturesExchangeInfo.json
+        local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json".replace("BinanceExch", "BinanceFuturesExch")
+
+        # print('----> Filename to check:', local_fn)
 
         if (
             self.exchange == "Bybit Perpetual"
@@ -192,8 +194,8 @@ class Strat(Vanilla):
         else:
             # Fall back to Binance Perp rules if exchange != bybit
             if not os.path.exists(local_fn) or is_live():
-                self.download_rules(exchange="Binance Futures")
-            rules = self.binance_rules()
+                self.download_rules(exchange="Binance Futures", local_fn=local_fn)
+            rules = self.binance_rules(fn=local_fn)
 
         self.minQty = float(rules["minQty"])
         self.notional = float(rules["notional"])
@@ -1132,7 +1134,11 @@ class Strat(Vanilla):
         exc = "Bybit USDT Perpetual" if self.trade_with_bybit_rules else exchange
 
         if not local_fn:
-            local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json"
+            # local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json"
+            print('Creating new local fn cause local_fn not given')
+            local_fn = f"{exc.replace(' ', '')}ExchangeInfo.json".replace("BinanceExch", "BinanceFuturesExch")
+        # else:
+        #     print('local_fn parameter: ', local_fn)
 
         print(
             f"Downloading rules for {exchange}. {local_fn=}, URL: {self.trade_rule_urls[exc]}"
@@ -1163,7 +1169,7 @@ class Strat(Vanilla):
         # except Exception as e:
         #     print(f"Error while fetching data from {exc}. {e}")
 
-    def binance_rules(self):
+    def binance_rules(self, fn):
         """
         Parse Binance Futures trading rules.
         """
@@ -1176,7 +1182,7 @@ class Strat(Vanilla):
         }
 
         try:
-            with open("BinanceFuturesExchangeInfo.json") as f:
+            with open(fn) as f:
                 data = json.load(f)
 
             for i in data["symbols"]:
@@ -1194,8 +1200,8 @@ class Strat(Vanilla):
             rules["quantityPrecision"] = int(
                 rules_json["quantityPrecision"]
             )  # Base asset precision
-        except:
-            print("Error in BinanceFuturesExchangeInfo.json")
+        except Exception as e:
+            print(f"Error in {fn}\n{e}")
             exit()
 
         return rules
